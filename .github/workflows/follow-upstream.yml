@@ -1,0 +1,114 @@
+name: follow upstream
+
+# Once a day: if upstream published a new release, or Node.js shipped a newer
+# patch than our images carry, build arm64 images for it. Once the images exist,
+# move the `release` branch onto the new upstream tag (plus these workflows), so
+# the compose file Coolify reads always names images that were already built.
+#
+# Deploying stays a click in Coolify: upstream migrations have no way back, so
+# an upgrade should be watched.
+#
+# Moving the branch needs SYNC_TOKEN, a fine-grained token for this repository
+# with Contents and Workflows set to read and write: the default token may not
+# push commits that touch .github/workflows, and upstream's history does.
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: follow-upstream
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      node: ${{ steps.check.outputs.node }}
+      build: ${{ steps.check.outputs.build }}
+      move: ${{ steps.check.outputs.move }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/OpenLabs-so/openanalytics/releases/latest -q .tag_name)"
+          major="$(curl -fsSL "https://raw.githubusercontent.com/OpenLabs-so/openanalytics/${tag}/infra/docker/node-app.Dockerfile" \
+            | sed -nE 's/^FROM node:([0-9]+)\..*/\1/p' | head -1)"
+          node="$(curl -fsSL https://nodejs.org/dist/index.json \
+            | jq -r --arg m "v${major}." 'map(select(.version | startswith($m)))[0].version' | sed 's/^v//')"
+
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openanalytics"
+          build=false
+          for image in api collector worker query-gateway realtime migrate web clickhouse valkey; do
+            if ! docker manifest inspect "$repo/$image:${tag}-node${node}" >/dev/null 2>&1; then
+              build=true
+              echo "missing: $image:${tag}-node${node}"
+            fi
+          done
+
+          current="$(cat .github/upstream-release 2>/dev/null || true)"
+          move=$([ "$current" != "$tag" ] && echo true || echo false)
+
+          echo "upstream $tag, branch on ${current:-nothing}, Node.js $node, build=$build, move=$move"
+          {
+            echo "tag=$tag"
+            echo "node=$node"
+            echo "build=$build"
+            echo "move=$move"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    uses: ./.github/workflows/arm64-images.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
+      node: ${{ needs.check.outputs.node }}
+
+  move:
+    needs: [check, build]
+    if: >-
+      always()
+      && needs.check.result == 'success'
+      && needs.check.outputs.move == 'true'
+      && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.SYNC_TOKEN }}
+          fetch-depth: 0
+
+      - name: Move release onto ${{ needs.check.outputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.check.outputs.tag }}"
+          keep="$(mktemp -d)"
+          cp .github/workflows/arm64-images.yml .github/workflows/follow-upstream.yml "$keep/"
+
+          git remote add upstream https://github.com/OpenLabs-so/openanalytics.git
+          git fetch --no-tags upstream "refs/tags/${tag}:refs/tags/${tag}"
+          git checkout -B release "$tag"
+
+          # The compose file defaults OA_IMAGE_TAG to its own release; Coolify
+          # relies on that, so refuse a tree whose default names another tag.
+          grep -q ":-${tag}}" infra/selfhost/docker-compose.coolify.yml \
+            || { echo "::error::docker-compose.coolify.yml does not default to ${tag}"; exit 1; }
+
+          cp "$keep"/*.yml .github/workflows/
+          echo "$tag" > .github/upstream-release
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github
+          git commit -m "Follow upstream ${tag}"
+          git push --force origin release

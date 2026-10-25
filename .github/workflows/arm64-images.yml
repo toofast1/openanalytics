@@ -1,0 +1,120 @@
+name: arm64 images
+
+# Builds the nine images docker-compose.coolify.yml runs, for arm64, on a native
+# arm64 runner (free on public repositories), and pushes them to this fork's
+# GHCR namespace as <tag> and <tag>-node<version>.
+#
+# The Node.js base image is replaced with the newest patch of the major the
+# upstream release uses, so security releases reach us without waiting for
+# upstream. Run by hand, or called by follow-upstream.yml.
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Upstream release tag to build, e.g. v0.8.0'
+        required: true
+        type: string
+      node:
+        description: 'Node.js version (empty = newest patch of the major upstream uses)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      node:
+        required: false
+        type: string
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      node: ${{ steps.node.outputs.version }}
+    steps:
+      - id: node
+        run: |
+          set -euo pipefail
+          version="${{ inputs.node }}"
+          if [ -z "$version" ]; then
+            major="$(curl -fsSL "https://raw.githubusercontent.com/OpenLabs-so/openanalytics/${{ inputs.tag }}/infra/docker/node-app.Dockerfile" \
+              | sed -nE 's/^FROM node:([0-9]+)\..*/\1/p' | head -1)"
+            version="$(curl -fsSL https://nodejs.org/dist/index.json \
+              | jq -r --arg m "v${major}." 'map(select(.version | startswith($m)))[0].version' | sed 's/^v//')"
+          fi
+          echo "Node.js $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: ${{ matrix.image }}
+    needs: resolve
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - image: api
+            app: api
+          - image: collector
+            app: collector
+          - image: worker
+            app: worker
+          - image: query-gateway
+            app: query-gateway
+          - image: realtime
+            app: realtime
+          - image: migrate
+            app: worker
+          - image: web
+            dockerfile: infra/selfhost/web.Dockerfile
+          - image: clickhouse
+            dockerfile: infra/selfhost/clickhouse.Dockerfile
+          - image: valkey
+            dockerfile: infra/selfhost/valkey.Dockerfile
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: OpenLabs-so/openanalytics
+          ref: ${{ inputs.tag }}
+
+      - id: repo
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openanalytics" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Pin the Node.js base image
+        run: |
+          sed -i -E "s/^FROM node:[0-9.]+-slim/FROM node:${{ needs.resolve.outputs.node }}-slim/" \
+            infra/docker/node-app.Dockerfile infra/selfhost/web.Dockerfile
+          grep -h '^FROM node' infra/docker/node-app.Dockerfile infra/selfhost/web.Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile || 'infra/docker/node-app.Dockerfile' }}
+          platforms: linux/arm64
+          push: true
+          build-args: |
+            APP=${{ matrix.app || '' }}
+            GIT_COMMIT=${{ steps.repo.outputs.sha }}
+          tags: |
+            ${{ steps.repo.outputs.name }}/${{ matrix.image }}:${{ inputs.tag }}
+            ${{ steps.repo.outputs.name }}/${{ matrix.image }}:${{ inputs.tag }}-node${{ needs.resolve.outputs.node }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: false
