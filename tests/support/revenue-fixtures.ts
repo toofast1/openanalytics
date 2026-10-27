@@ -396,13 +396,18 @@ export function dodoEvent(
 
 const LEMON_CREATED = '2026-07-31T10:00:00.000000Z'
 
-/** A Lemon Squeezy Order payload, in the shape `order_*` events and `GET /orders/:id` return. */
+/**
+ * A Lemon Squeezy Order, as `order_*` events and `GET /orders/:id` carry it.
+ *
+ * Written from the documented Order object. Ids are numeric strings, as the API
+ * sends them: that is what makes an order and an invoice able to share one.
+ */
 export function lemonSqueezyOrder(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
     type: 'orders',
-    id: 'ord_test_1',
+    id: '1001',
     attributes: {
       store_id: 1,
       customer_id: 101,
@@ -444,13 +449,13 @@ export function lemonSqueezyOrder(
   }
 }
 
-/** A Lemon Squeezy Subscription Invoice payload. */
+/** A Lemon Squeezy Subscription Invoice: a renewal unless `billing_reason` says otherwise. */
 export function lemonSqueezySubscriptionInvoice(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
     type: 'subscription-invoices',
-    id: 'inv_test_1',
+    id: '2002',
     attributes: {
       store_id: 1,
       subscription_id: 501,
@@ -475,7 +480,7 @@ export function lemonSqueezySubscriptionInvoice(
   }
 }
 
-/** The Lemon Squeezy webhook envelope: `{ meta: { event_name, custom_data, test_mode }, data }`. */
+/** The webhook envelope: `{ meta: { event_name, custom_data }, data }` — no id, no time. */
 export function lemonSqueezyEvent(
   eventName: string,
   data: Record<string, unknown>,
@@ -487,7 +492,6 @@ export function lemonSqueezyEvent(
       custom_data: {
         oa_external_id: 'site_user_1',
       },
-      test_mode: false,
     },
     data,
     ...overrides,

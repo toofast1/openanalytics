@@ -61,16 +61,16 @@ export default function RevenueDocsPage() {
           receives is acknowledged and ignored.
         </p>
         <p>
-          Lemon Squeezy is the merchant of record, so revenue is reported net of the
-          tax it collects and remits. Refunds are recorded against the order at
-          the amount refunded.
+          Lemon Squeezy is the merchant of record, so revenue is reported net of
+          the tax it collects and remits. Refunds are recorded at the amount the
+          customer got back, which includes that tax. A new subscription&apos;s
+          first payment is counted once, from its order.
         </p>
         <p>
-          For attribution, pass your visitor identifier as{" "}
-          <Code>oa_external_id</Code> in custom checkout data (such as{" "}
-          <Code>checkout[custom][oa_external_id]</Code>); the{" "}
-          <Code>[order_id]</Code> return URL placeholder links the purchase back
-          to the visit that produced it.
+          For attribution, pass the id you give <Code>identify()</Code> as{" "}
+          <Code>oa_external_id</Code> in the checkout&apos;s custom data
+          (<Code>checkout[custom][oa_external_id]</Code>). It reaches us on the
+          webhook; a payment imported from history carries none.
         </p>
       </DocSection>
 

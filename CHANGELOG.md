@@ -27,9 +27,10 @@ Everyone else has nothing to do.
 - **Dodo Payments as a revenue provider.** A third provider a site can
   connect, with a live-mode API key and a webhook. Revenue is reported net of
   the tax Dodo remits as merchant of record.
-- **Lemon Squeezy as a revenue provider.** Connect a store with a live-mode API
-  key and a webhook signing secret. Reports revenue net of tax and supports
-  one-time orders, subscription payments, refunds, and disputes.
+- **Lemon Squeezy as a revenue provider.** A fourth provider a site can
+  connect, with an API key and a webhook. Orders and subscription renewals are
+  reported net of the tax Lemon Squeezy remits; refunds are subtracted, tax
+  included. Lemon Squeezy has no disputes to report.
 
 ### Changed
 

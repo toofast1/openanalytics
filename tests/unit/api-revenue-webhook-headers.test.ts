@@ -279,7 +279,7 @@ describe('the route passes the whole header set', () => {
     expect(calls.ledgerInserts).toHaveLength(0)
   })
 
-  it('authenticates a Lemon Squeezy delivery using X-Signature header', async () => {
+  it('authenticates a Lemon Squeezy delivery, which signs with one header and sends no id', async () => {
     world.credential = credential('lemonsqueezy', WEBHOOK_SECRET)
     const body = JSON.stringify(lemonSqueezyEvent('order_created', lemonSqueezyOrder()))
     const headers = signLemonSqueezyWebhook({
@@ -291,7 +291,9 @@ describe('the route passes the whole header set', () => {
     expect(res.status).toBe(200)
     expect(calls.ledgerInserts[0]).toMatchObject({
       provider: 'lemonsqueezy',
-      providerEventId: headers['x-signature'],
+      // Derived from the object's state, not the signature: a rotated secret
+      // must not make one delivery look like two.
+      providerEventId: 'order_created:orders:1001:2026-07-31T10:00:00.000000Z',
     })
   })
 

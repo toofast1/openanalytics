@@ -3,9 +3,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 /**
  * Lemon Squeezy webhook signature verification.
  *
- * Lemon Squeezy signs incoming webhooks with an HMAC-SHA256 hex digest
- * of the raw payload body using the endpoint's signing secret, and
- * transmits it in the `X-Signature` request header.
+ * An HMAC-SHA256 hex digest of the raw body under the endpoint's signing
+ * secret, sent as `X-Signature`. No timestamp is signed, so unlike Standard
+ * Webhooks there is no replay window to enforce; the ledger's dedupe is what
+ * makes a replayed delivery harmless.
  */
 
 export type LemonSqueezySignatureFailure = 'malformed_header' | 'no_matching_signature'
@@ -13,27 +14,25 @@ export type LemonSqueezySignatureFailure = 'malformed_header' | 'no_matching_sig
 export type LemonSqueezySignatureResult =
   { readonly ok: true } | { readonly ok: false; readonly reason: LemonSqueezySignatureFailure }
 
-function safeEqualHex(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  return timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'))
-}
+/** A SHA-256 hex digest, and nothing else. */
+const HEX_DIGEST = /^[0-9a-f]{64}$/iu
 
 /**
- * Verifies a Lemon Squeezy webhook signature against the raw request body.
+ * Never throws. The header is checked for shape before it is decoded, because
+ * `Buffer.from(x, 'hex')` silently drops what is not hex: a 64-character header
+ * with one stray character decodes short, and `timingSafeEqual` throws on a
+ * length mismatch — a 500 on a delivery Lemon Squeezy would then retry.
  */
 export function verifyLemonSqueezySignature(input: {
   readonly rawBody: string
   readonly header: string | undefined
   readonly secret: string
 }): LemonSqueezySignatureResult {
-  if (!input.header || typeof input.header !== 'string' || input.header.trim() === '') {
-    return { ok: false, reason: 'malformed_header' }
-  }
+  const header = input.header?.trim() ?? ''
+  if (!HEX_DIGEST.test(header)) return { ok: false, reason: 'malformed_header' }
 
-  const expected = createHmac('sha256', input.secret).update(input.rawBody).digest('hex')
-  const incoming = input.header.trim()
-
-  return safeEqualHex(incoming, expected)
+  const expected = createHmac('sha256', input.secret).update(input.rawBody).digest()
+  return timingSafeEqual(Buffer.from(header, 'hex'), expected)
     ? { ok: true }
     : { ok: false, reason: 'no_matching_signature' }
 }
