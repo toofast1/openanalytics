@@ -394,6 +394,106 @@ export function dodoEvent(
   }
 }
 
+const LEMON_CREATED = '2026-07-31T10:00:00.000000Z'
+
+/** A Lemon Squeezy Order payload, in the shape `order_*` events and `GET /orders/:id` return. */
+export function lemonSqueezyOrder(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    type: 'orders',
+    id: 'ord_test_1',
+    attributes: {
+      store_id: 1,
+      customer_id: 101,
+      identifier: '89b36d62-4f5c-4353-853f-0c769d0535c8',
+      order_number: 1,
+      user_name: 'Test Buyer',
+      user_email: 'buyer@example.com',
+      currency: 'USD',
+      currency_rate: '1.0000',
+      subtotal: 4999,
+      discount_total: 0,
+      tax: 1050,
+      total: 6049,
+      subtotal_usd: 4999,
+      discount_total_usd: 0,
+      tax_usd: 1050,
+      total_usd: 6049,
+      status: 'paid',
+      status_formatted: 'Paid',
+      refunded: false,
+      refunded_at: null,
+      refunded_amount: 0,
+      first_order_item: {
+        order_id: 1,
+        product_id: 201,
+        variant_id: 301,
+        product_name: 'Pro Subscription',
+        variant_name: 'Monthly',
+        price: 4999,
+      },
+      urls: {
+        receipt: 'https://app.lemonsqueezy.com/my-orders/receipt/1',
+      },
+      created_at: LEMON_CREATED,
+      updated_at: LEMON_CREATED,
+      test_mode: false,
+    },
+    ...overrides,
+  }
+}
+
+/** A Lemon Squeezy Subscription Invoice payload. */
+export function lemonSqueezySubscriptionInvoice(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    type: 'subscription-invoices',
+    id: 'inv_test_1',
+    attributes: {
+      store_id: 1,
+      subscription_id: 501,
+      customer_id: 101,
+      user_name: 'Test Buyer',
+      user_email: 'buyer@example.com',
+      billing_reason: 'renewal',
+      currency: 'USD',
+      subtotal: 4999,
+      discount_total: 0,
+      tax: 1050,
+      total: 6049,
+      status: 'paid',
+      refunded: false,
+      refunded_at: null,
+      refunded_amount: 0,
+      created_at: LEMON_CREATED,
+      updated_at: LEMON_CREATED,
+      test_mode: false,
+    },
+    ...overrides,
+  }
+}
+
+/** The Lemon Squeezy webhook envelope: `{ meta: { event_name, custom_data, test_mode }, data }`. */
+export function lemonSqueezyEvent(
+  eventName: string,
+  data: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    meta: {
+      event_name: eventName,
+      custom_data: {
+        oa_external_id: 'site_user_1',
+      },
+      test_mode: false,
+    },
+    data,
+    ...overrides,
+  }
+}
+
 /**
  * The ECB daily file, in the exact nesting the real document uses.
  *

@@ -689,26 +689,49 @@ function ConnectProviderFlow({
             >
               Open Stripe&rsquo;s create-key screen ↗
             </a>
+          ) : provider.id === "lemonsqueezy" ? (
+            <a
+              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+              href="https://app.lemonsqueezy.com/settings/api"
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              Open Lemon Squeezy&rsquo;s API screen ↗
+            </a>
+          ) : provider.id === "dodo" ? (
+            <a
+              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+              href="https://app.dodopayments.com/developer"
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              Open Dodo&rsquo;s developer screen ↗
+            </a>
+          ) : provider.id === "polar" ? (
+            <a
+              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+              href="https://polar.sh/settings"
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              Open Polar&rsquo;s settings screen ↗
+            </a>
           ) : null}
 
-          {/* The permissions are the step's content, not a
-              footnote behind a toggle: one grant short means a
-              connection that probes fine and silently
-              under-reports. All twelve rows in full — a person
-              ticking boxes in Stripe's form needs the whole list
-              in view, not a viewport to fish rows out of. */}
-          <dl className="flex flex-col gap-1 rounded-2xl bg-secondary/40 p-3 text-xs">
-            {STRIPE_PERMISSIONS.map(([resource, why]) => (
-              <div className="flex items-baseline gap-3" key={resource}>
-                <dt className="w-36 shrink-0 font-medium">
-                  {resource}
-                </dt>
-                <dd className="min-w-0 text-muted-foreground">
-                  Read: {why}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {provider.id === "stripe" ? (
+            <dl className="flex flex-col gap-1 rounded-2xl bg-secondary/40 p-3 text-xs">
+              {STRIPE_PERMISSIONS.map(([resource, why]) => (
+                <div className="flex items-baseline gap-3" key={resource}>
+                  <dt className="w-36 shrink-0 font-medium">
+                    {resource}
+                  </dt>
+                  <dd className="min-w-0 text-muted-foreground">
+                    Read: {why}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
         </div>
       ) : step === 2 ? (
         <div className="flex flex-col gap-3 p-4">

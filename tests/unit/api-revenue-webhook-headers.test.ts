@@ -3,14 +3,26 @@ import { createRevenueAdapterRegistry, revenueCredentialAad } from '@openanalyti
 import {
   createCredentialVault,
   createDodoRevenueAdapter,
+  createLemonSqueezyRevenueAdapter,
   createPolarRevenueAdapter,
   createStripeRevenueAdapter,
 } from '@openanalytics/integrations'
 import type { Database, RevenueCredentialRow } from '@openanalytics/postgres'
 import type * as PostgresModule from '@openanalytics/postgres'
-import { signStandardWebhook, signStripeWebhook } from '@openanalytics/testkit'
+import {
+  signLemonSqueezyWebhook,
+  signStandardWebhook,
+  signStripeWebhook,
+} from '@openanalytics/testkit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { dodoEvent, dodoPayment, polarEvent, polarOrder } from '../support/revenue-fixtures.ts'
+import {
+  dodoEvent,
+  dodoPayment,
+  lemonSqueezyEvent,
+  lemonSqueezyOrder,
+  polarEvent,
+  polarOrder,
+} from '../support/revenue-fixtures.ts'
 import { stripeCharge, stripeEvent } from '../support/revenue-fixtures.ts'
 
 /**
@@ -110,6 +122,7 @@ const app = createRevenueWebhookRoutes({
     createStripeRevenueAdapter(),
     createPolarRevenueAdapter(),
     createDodoRevenueAdapter(),
+    createLemonSqueezyRevenueAdapter(),
   ]),
 })
 
@@ -264,6 +277,22 @@ describe('the route passes the whole header set', () => {
     const res = await deliver('dodo', body, headers)
     expect(res.status).toBe(400)
     expect(calls.ledgerInserts).toHaveLength(0)
+  })
+
+  it('authenticates a Lemon Squeezy delivery using X-Signature header', async () => {
+    world.credential = credential('lemonsqueezy', WEBHOOK_SECRET)
+    const body = JSON.stringify(lemonSqueezyEvent('order_created', lemonSqueezyOrder()))
+    const headers = signLemonSqueezyWebhook({
+      payload: body,
+      secret: WEBHOOK_SECRET,
+    })
+
+    const res = await deliver('lemonsqueezy', body, headers)
+    expect(res.status).toBe(200)
+    expect(calls.ledgerInserts[0]).toMatchObject({
+      provider: 'lemonsqueezy',
+      providerEventId: headers['x-signature'],
+    })
   })
 
   it('still refuses a payload posted at the wrong provider’s path', async () => {

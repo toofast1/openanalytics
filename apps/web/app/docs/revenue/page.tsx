@@ -51,6 +51,29 @@ export default function RevenueDocsPage() {
         </p>
       </DocSection>
 
+      <DocSection title="Connecting Lemon Squeezy">
+        <p>
+          The same two steps: an API key from your Lemon Squeezy dashboard
+          (Settings, API), then a webhook endpoint at the address we show you,
+          whose signing secret you paste back. Subscribe it to the{" "}
+          <Code>order_created</Code>, <Code>order_refunded</Code>, and{" "}
+          <Code>subscription_payment_*</Code> events; anything else it
+          receives is acknowledged and ignored.
+        </p>
+        <p>
+          Lemon Squeezy is the merchant of record, so revenue is reported net of the
+          tax it collects and remits. Refunds are recorded against the order at
+          the amount refunded.
+        </p>
+        <p>
+          For attribution, pass your visitor identifier as{" "}
+          <Code>oa_external_id</Code> in custom checkout data (such as{" "}
+          <Code>checkout[custom][oa_external_id]</Code>); the{" "}
+          <Code>[order_id]</Code> return URL placeholder links the purchase back
+          to the visit that produced it.
+        </p>
+      </DocSection>
+
       <DocSection title="Attribution is opt-in, and it asks something of you">
         <p>
           Revenue totals need nothing from your visitors. Tying a payment back

@@ -103,8 +103,8 @@ describe('RevenueProvider', () => {
       'stripe',
       'polar',
       'dodo',
-      'paddle',
       'lemonsqueezy',
+      'paddle',
       'creem',
     ])
   })

@@ -179,6 +179,22 @@ export {
 } from './dodo-revenue.ts'
 
 /**
+ * The fourth revenue provider: Lemon Squeezy.
+ */
+export {
+  LEMONSQUEEZY_API_BASE,
+  LEMONSQUEEZY_LIST_PAGE_SIZE,
+  LEMONSQUEEZY_REVENUE_PROVIDER_ID,
+  createLemonSqueezyRevenueAdapter,
+} from './lemonsqueezy-revenue.ts'
+
+export {
+  verifyLemonSqueezySignature,
+  type LemonSqueezySignatureFailure,
+  type LemonSqueezySignatureResult,
+} from './lemonsqueezy-signature.ts'
+
+/**
  * The Standard Webhooks verifier, beside the Stripe one. Exported because the
  * webhook suites sign with it, and because the next provider on the D9 list that
  * uses the scheme should find it rather than write a second copy.

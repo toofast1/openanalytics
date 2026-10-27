@@ -43,14 +43,17 @@ export interface RevenueProviderDescriptor {
  * header Polar's does. It moved up to sit with the providers that work, which is
  * the order this list promises.
  *
- * The remaining three are recorded follow-ups behind the same framework.
+ * **Lemon Squeezy is the fourth**, connecting via its API and HMAC-SHA256
+ * webhooks as merchant of record.
+ *
+ * The remaining two are recorded follow-ups behind the same framework.
  */
 export const REVENUE_PROVIDERS: readonly RevenueProviderDescriptor[] = [
   { id: 'stripe', displayName: 'Stripe', available: true },
   { id: 'polar', displayName: 'Polar', available: true },
   { id: 'dodo', displayName: 'Dodo Payments', available: true },
+  { id: 'lemonsqueezy', displayName: 'Lemon Squeezy', available: true },
   { id: 'paddle', displayName: 'Paddle', available: false },
-  { id: 'lemonsqueezy', displayName: 'Lemon Squeezy', available: false },
   { id: 'creem', displayName: 'Creem', available: false },
 ]
 

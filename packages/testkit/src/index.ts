@@ -121,3 +121,16 @@ export function signStandardWebhook(input: {
     'webhook-signature': `v1,${signature}`,
   }
 }
+
+/**
+ * Builds the Lemon Squeezy HMAC-SHA256 signature header for a raw request body.
+ */
+export function signLemonSqueezyWebhook(input: {
+  payload: string
+  secret: string
+}): Record<string, string> {
+  const signature = createHmac('sha256', input.secret).update(input.payload).digest('hex')
+  return {
+    'x-signature': signature,
+  }
+}
