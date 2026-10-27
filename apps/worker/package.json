@@ -29,6 +29,6 @@
     "@openanalytics/observability": "workspace:*",
     "@openanalytics/postgres": "workspace:*",
     "@openanalytics/redis": "workspace:*",
-    "hono": "4.12.31"
+    "hono": "4.13.14"
   }
 }

@@ -97,7 +97,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.10
-        version: 2.0.10(hono@4.12.31)
+        version: 2.0.10(hono@4.13.14)
       '@openanalytics/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -120,8 +120,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/redis
       hono:
-        specifier: 4.12.31
-        version: 4.12.31
+        specifier: 4.13.14
+        version: 4.13.14
 
   apps/cli:
     dependencies:
@@ -136,7 +136,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.10
-        version: 2.0.10(hono@4.12.31)
+        version: 2.0.10(hono@4.13.14)
       '@openanalytics/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -153,8 +153,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/redis
       hono:
-        specifier: 4.12.31
-        version: 4.12.31
+        specifier: 4.13.14
+        version: 4.13.14
       mmdb-lib:
         specifier: 3.0.2
         version: 3.0.2
@@ -163,7 +163,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.10
-        version: 2.0.10(hono@4.12.31)
+        version: 2.0.10(hono@4.13.14)
       '@openanalytics/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -177,8 +177,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/observability
       hono:
-        specifier: 4.12.31
-        version: 4.12.31
+        specifier: 4.13.14
+        version: 4.13.14
       ioredis:
         specifier: 5.11.1
         version: 5.11.1
@@ -190,7 +190,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.10
-        version: 2.0.10(hono@4.12.31)
+        version: 2.0.10(hono@4.13.14)
       '@openanalytics/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -207,8 +207,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/redis
       hono:
-        specifier: 4.12.31
-        version: 4.12.31
+        specifier: 4.13.14
+        version: 4.13.14
 
   apps/tracker: {}
 
@@ -358,7 +358,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.10
-        version: 2.0.10(hono@4.12.31)
+        version: 2.0.10(hono@4.13.14)
       '@openanalytics/clickhouse':
         specifier: workspace:*
         version: link:../../packages/clickhouse
@@ -381,8 +381,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/redis
       hono:
-        specifier: 4.12.31
-        version: 4.12.31
+        specifier: 4.13.14
+        version: 4.13.14
 
   packages/auth:
     dependencies:
@@ -452,8 +452,8 @@ importers:
         specifier: workspace:*
         version: link:../contracts
       hono:
-        specifier: 4.12.31
-        version: 4.12.31
+        specifier: 4.13.14
+        version: 4.13.14
 
   packages/postgres:
     dependencies:
@@ -3000,8 +3000,8 @@ packages:
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
 
-  hono@4.12.31:
-    resolution: {integrity: sha512-zJIHFrl6bq3RDd2YusFNCDlM8qUprxKswyi/OPzPyzKDdyBXDqWx8bZlZ7R+saTdSTatUmb3O7K4SspGPaEOQg==}
+  hono@4.13.14:
+    resolution: {integrity: sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ==}
     engines: {node: '>=16.9.0'}
 
   https-proxy-agent@7.0.6:
@@ -4852,9 +4852,9 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@hono/node-server@2.0.10(hono@4.12.31)':
+  '@hono/node-server@2.0.10(hono@4.13.14)':
     dependencies:
-      hono: 4.12.31
+      hono: 4.13.14
 
   '@hugeicons/core-free-icons@3.3.0': {}
 
@@ -6789,7 +6789,7 @@ snapshots:
     dependencies:
       hermes-estree: 0.25.1
 
-  hono@4.12.31: {}
+  hono@4.13.14: {}
 
   https-proxy-agent@7.0.6(supports-color@10.2.2):
     dependencies:
