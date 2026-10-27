@@ -7,6 +7,12 @@ name: arm64 images
 # The Node.js base image is replaced with the newest patch of the major the
 # upstream release uses, so security releases reach us without waiting for
 # upstream. Run by hand, or called by follow-upstream.yml.
+#
+# By hand it can also build a branch instead of a release: give `repository`
+# and `ref` (e.g. toofast1/openanalytics and feat/dodo-revenue) and a `tag` of
+# your own (e.g. v0.8.0-dodo.1), then point OA_IMAGE_TAG at it in Coolify. Such
+# a tag is never one follow-upstream.yml looks for, so it cannot be mistaken for
+# a release build.
 
 permissions:
   contents: read
@@ -16,11 +22,20 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Upstream release tag to build, e.g. v0.8.0'
+        description: 'Image tag; the upstream release tag to build, e.g. v0.8.0'
         required: true
         type: string
       node:
-        description: 'Node.js version (empty = newest patch of the major upstream uses)'
+        description: 'Node.js version (empty = newest patch of the major the source uses)'
+        required: false
+        type: string
+      repository:
+        description: 'Repository to build from'
+        required: false
+        type: string
+        default: OpenLabs-so/openanalytics
+      ref:
+        description: 'Git ref to build (empty = the tag)'
         required: false
         type: string
   workflow_call:
@@ -31,6 +46,13 @@ on:
       node:
         required: false
         type: string
+      repository:
+        required: false
+        type: string
+        default: OpenLabs-so/openanalytics
+      ref:
+        required: false
+        type: string
 
 jobs:
   resolve:
@@ -39,11 +61,20 @@ jobs:
       node: ${{ steps.node.outputs.version }}
     steps:
       - id: node
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REPO: ${{ inputs.repository || 'OpenLabs-so/openanalytics' }}
+          SOURCE_REF: ${{ inputs.ref || inputs.tag }}
+          NODE_VERSION: ${{ inputs.node }}
         run: |
           set -euo pipefail
-          version="${{ inputs.node }}"
+          version="$NODE_VERSION"
           if [ -z "$version" ]; then
-            major="$(curl -fsSL "https://raw.githubusercontent.com/OpenLabs-so/openanalytics/${{ inputs.tag }}/infra/docker/node-app.Dockerfile" \
+            # The contents API rather than raw.githubusercontent.com, because a
+            # branch ref may contain a slash and the raw URL cannot tell where
+            # the ref ends and the path begins.
+            major="$(gh api -H 'Accept: application/vnd.github.raw' \
+                "repos/${SOURCE_REPO}/contents/infra/docker/node-app.Dockerfile?ref=${SOURCE_REF}" \
               | sed -nE 's/^FROM node:([0-9]+)\..*/\1/p' | head -1)"
             version="$(curl -fsSL https://nodejs.org/dist/index.json \
               | jq -r --arg m "v${major}." 'map(select(.version | startswith($m)))[0].version' | sed 's/^v//')"
@@ -81,8 +112,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          repository: OpenLabs-so/openanalytics
-          ref: ${{ inputs.tag }}
+          repository: ${{ inputs.repository || 'OpenLabs-so/openanalytics' }}
+          ref: ${{ inputs.ref || inputs.tag }}
 
       - id: repo
         run: |
