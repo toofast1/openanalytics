@@ -9,10 +9,12 @@ import {
   type RevenueAdapter,
 } from '@openanalytics/domain'
 import {
+  CREEM_REVENUE_PROVIDER_ID,
   DODO_REVENUE_PROVIDER_ID,
   LEMONSQUEEZY_REVENUE_PROVIDER_ID,
   POLAR_REVENUE_PROVIDER_ID,
   STRIPE_REVENUE_PROVIDER_ID,
+  createCreemRevenueAdapter,
   createDodoRevenueAdapter,
   createLemonSqueezyRevenueAdapter,
   createPolarRevenueAdapter,
@@ -42,6 +44,7 @@ describe('revenue provider catalog', () => {
       'polar',
       'dodo',
       'lemonsqueezy',
+      'creem',
     ])
   })
 
@@ -53,8 +56,8 @@ describe('revenue provider catalog', () => {
       'polar',
       'dodo',
       'lemonsqueezy',
-      'paddle',
       'creem',
+      'paddle',
     ])
   })
 
@@ -83,6 +86,8 @@ describe('revenue provider catalog', () => {
     expect(findRevenueProvider(DODO_REVENUE_PROVIDER_ID)?.available).toBe(true)
     expect(LEMONSQUEEZY_REVENUE_PROVIDER_ID).toBe('lemonsqueezy')
     expect(findRevenueProvider(LEMONSQUEEZY_REVENUE_PROVIDER_ID)?.available).toBe(true)
+    expect(CREEM_REVENUE_PROVIDER_ID).toBe('creem')
+    expect(findRevenueProvider(CREEM_REVENUE_PROVIDER_ID)?.available).toBe(true)
   })
 
   it('registers every real adapter side by side, which is the whole claim', () => {
@@ -93,8 +98,15 @@ describe('revenue provider catalog', () => {
       createPolarRevenueAdapter(),
       createDodoRevenueAdapter(),
       createLemonSqueezyRevenueAdapter(),
+      createCreemRevenueAdapter(),
     ])
-    expect([...registry.keys()].sort()).toEqual(['dodo', 'lemonsqueezy', 'polar', 'stripe'])
+    expect([...registry.keys()].sort()).toEqual([
+      'creem',
+      'dodo',
+      'lemonsqueezy',
+      'polar',
+      'stripe',
+    ])
 
     // Every provider the catalog advertises must resolve to an adapter here.
     for (const provider of REVENUE_PROVIDERS.filter((row) => row.available)) {

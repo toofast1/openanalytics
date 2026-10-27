@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { createRevenueAdapterRegistry, revenueCredentialAad } from '@openanalytics/domain'
 import {
   createCredentialVault,
+  createCreemRevenueAdapter,
   createDodoRevenueAdapter,
   createLemonSqueezyRevenueAdapter,
   createPolarRevenueAdapter,
@@ -10,12 +11,15 @@ import {
 import type { Database, RevenueCredentialRow } from '@openanalytics/postgres'
 import type * as PostgresModule from '@openanalytics/postgres'
 import {
+  signCreemWebhook,
   signLemonSqueezyWebhook,
   signStandardWebhook,
   signStripeWebhook,
 } from '@openanalytics/testkit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  creemCheckout,
+  creemEvent,
   dodoEvent,
   dodoPayment,
   lemonSqueezyEvent,
@@ -123,6 +127,7 @@ const app = createRevenueWebhookRoutes({
     createPolarRevenueAdapter(),
     createDodoRevenueAdapter(),
     createLemonSqueezyRevenueAdapter(),
+    createCreemRevenueAdapter(),
   ]),
 })
 
@@ -294,6 +299,19 @@ describe('the route passes the whole header set', () => {
       // Derived from the object's state, not the signature: a rotated secret
       // must not make one delivery look like two.
       providerEventId: 'order_created:orders:1001:2026-07-31T10:00:00.000000Z',
+    })
+  })
+
+  it('authenticates a Creem delivery and ledgers it under the envelope id', async () => {
+    world.credential = credential('creem', WEBHOOK_SECRET)
+    const body = JSON.stringify(creemEvent('checkout.completed', creemCheckout()))
+    const headers = signCreemWebhook({ payload: body, secret: WEBHOOK_SECRET })
+
+    const res = await deliver('creem', body, headers)
+    expect(res.status).toBe(200)
+    expect(calls.ledgerInserts[0]).toMatchObject({
+      provider: 'creem',
+      providerEventId: 'evt_test_1',
     })
   })
 

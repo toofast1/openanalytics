@@ -13,6 +13,7 @@ import {
   createCredentialVault,
   createOpenAiChatClient,
   createDodoRevenueAdapter,
+  createCreemRevenueAdapter,
   createLemonSqueezyRevenueAdapter,
   createS3ObjectStorage,
   createPolarRevenueAdapter,
@@ -311,13 +312,14 @@ if (env.OA_CREDENTIAL_KEYRING) {
       vault,
       adapters: createRevenueAdapterRegistry([
         createStripeRevenueAdapter(),
-        // Polar, Dodo and Lemon Squeezy. Registered here and in the worker from the same
+        // Polar, Dodo, Lemon Squeezy and Creem. Registered here and in the worker from the same
         // list the catalog advertises — a credential naming a provider with no
         // adapter fails `adapter_unavailable` rather than half-working, so the
         // two must be flipped together.
         createPolarRevenueAdapter(),
         createDodoRevenueAdapter(),
         createLemonSqueezyRevenueAdapter(),
+        createCreemRevenueAdapter(),
       ]),
     }
     // The active version's *label* — never material. It is what an operator

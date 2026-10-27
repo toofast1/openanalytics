@@ -698,6 +698,15 @@ function ConnectProviderFlow({
             >
               Open Lemon Squeezy&rsquo;s API screen ↗
             </a>
+          ) : provider.id === "creem" ? (
+            <a
+              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+              href="https://www.creem.io/dashboard/developers"
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              Open Creem&rsquo;s developers screen ↗
+            </a>
           ) : provider.id === "dodo" ? (
             <a
               className="text-xs font-medium text-primary underline-offset-4 hover:underline"

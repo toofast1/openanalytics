@@ -44,17 +44,18 @@ export interface RevenueProviderDescriptor {
  * the order this list promises.
  *
  * **Lemon Squeezy is the fourth**, connecting via its API and HMAC-SHA256
- * webhooks as merchant of record.
+ * webhooks as merchant of record. **Creem is the fifth**, signing the same way
+ * and carrying a checkout match hint the way Stripe's Checkout does.
  *
- * The remaining two are recorded follow-ups behind the same framework.
+ * Paddle is the one recorded follow-up left behind the same framework.
  */
 export const REVENUE_PROVIDERS: readonly RevenueProviderDescriptor[] = [
   { id: 'stripe', displayName: 'Stripe', available: true },
   { id: 'polar', displayName: 'Polar', available: true },
   { id: 'dodo', displayName: 'Dodo Payments', available: true },
   { id: 'lemonsqueezy', displayName: 'Lemon Squeezy', available: true },
+  { id: 'creem', displayName: 'Creem', available: true },
   { id: 'paddle', displayName: 'Paddle', available: false },
-  { id: 'creem', displayName: 'Creem', available: false },
 ]
 
 export function findRevenueProvider(id: unknown): RevenueProviderDescriptor | null {

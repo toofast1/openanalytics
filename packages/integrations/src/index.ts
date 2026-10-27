@@ -195,6 +195,24 @@ export {
 } from './lemonsqueezy-signature.ts'
 
 /**
+ * The fifth revenue provider: Creem. Its signature scheme is Lemon Squeezy's
+ * under another header, which is why the hex-HMAC verifier is its own module.
+ */
+export {
+  CREEM_API_BASE,
+  CREEM_LIST_PAGE_SIZE,
+  CREEM_REVENUE_PROVIDER_ID,
+  CREEM_TEST_API_BASE,
+  createCreemRevenueAdapter,
+} from './creem-revenue.ts'
+
+export {
+  verifyHexHmacSignature,
+  type HexHmacSignatureFailure,
+  type HexHmacSignatureResult,
+} from './hex-hmac-signature.ts'
+
+/**
  * The Standard Webhooks verifier, beside the Stripe one. Exported because the
  * webhook suites sign with it, and because the next provider on the D9 list that
  * uses the scheme should find it rather than write a second copy.

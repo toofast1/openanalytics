@@ -31,6 +31,10 @@ Everyone else has nothing to do.
   connect, with an API key and a webhook. Orders and subscription renewals are
   reported net of the tax Lemon Squeezy remits; refunds are subtracted, tax
   included. Lemon Squeezy has no disputes to report.
+- **Creem as a revenue provider.** A fifth provider a site can connect, with an
+  API key and a webhook. Payments are reported net of the tax Creem remits, a
+  new subscriber's first payment counts once, and the checkout id a success page
+  sends as `order_id` links the payment exactly.
 
 ### Changed
 

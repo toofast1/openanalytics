@@ -499,6 +499,139 @@ export function lemonSqueezyEvent(
 }
 
 /**
+ * Creem payloads, written from the sample bodies in Creem's webhook docs. One
+ * payment — `tran_test_1` on order `ord_test_1` — threads through all of them,
+ * which is the property the adapter keys on.
+ */
+const CREEM_TRANSACTION_CREATED = Date.parse('2026-07-31T10:00:00.000Z')
+
+export function creemTransaction(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'tran_test_1',
+    object: 'transaction',
+    amount: 1000,
+    amount_paid: 1210,
+    currency: 'EUR',
+    type: 'invoice',
+    tax_country: 'NL',
+    tax_amount: 210,
+    status: 'paid',
+    refunded_amount: null,
+    order: 'ord_test_1',
+    subscription: 'sub_test_1',
+    customer: 'cust_test_1',
+    description: 'Subscription payment',
+    created_at: CREEM_TRANSACTION_CREATED,
+    mode: 'prod',
+    ...overrides,
+  }
+}
+
+export function creemCheckout(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'ch_test_1',
+    object: 'checkout',
+    order: {
+      object: 'order',
+      id: 'ord_test_1',
+      customer: 'cust_test_1',
+      product: 'prod_test_1',
+      amount: 1000,
+      currency: 'EUR',
+      sub_total: 1000,
+      tax_amount: 210,
+      amount_due: 1210,
+      amount_paid: 1210,
+      status: 'paid',
+      type: 'recurring',
+      transaction: 'tran_test_1',
+      created_at: '2026-07-31T10:00:00.000Z',
+      updated_at: '2026-07-31T10:00:00.000Z',
+      mode: 'prod',
+    },
+    product: { id: 'prod_test_1', object: 'product', name: 'Monthly' },
+    customer: {
+      id: 'cust_test_1',
+      object: 'customer',
+      email: 'buyer@example.com',
+      name: 'Test Buyer',
+      external_id: null,
+    },
+    subscription: { id: 'sub_test_1', object: 'subscription' },
+    status: 'completed',
+    metadata: { userId: 'site_user_1' },
+    mode: 'prod',
+    ...overrides,
+  }
+}
+
+export function creemSubscription(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'sub_test_1',
+    object: 'subscription',
+    product: { id: 'prod_test_1', object: 'product', name: 'Monthly' },
+    customer: { id: 'cust_test_1', object: 'customer', email: 'buyer@example.com' },
+    status: 'active',
+    last_transaction_id: 'tran_test_1',
+    // Creem documents the transaction's own `customer` as null on this event.
+    last_transaction: creemTransaction({ customer: null }),
+    metadata: { userId: 'site_user_1' },
+    mode: 'prod',
+    ...overrides,
+  }
+}
+
+export function creemRefund(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'ref_test_1',
+    object: 'refund',
+    status: 'succeeded',
+    refund_amount: 500,
+    refund_currency: 'EUR',
+    reason: 'requested_by_customer',
+    transaction: creemTransaction({ status: 'partialRefund', refunded_amount: 500 }),
+    checkout: { id: 'ch_test_1', object: 'checkout', metadata: { userId: 'site_user_1' } },
+    order: { id: 'ord_test_1', object: 'order' },
+    customer: { id: 'cust_test_1', object: 'customer', email: 'buyer@example.com' },
+    created_at: Date.parse('2026-08-02T09:00:00.000Z'),
+    mode: 'prod',
+    ...overrides,
+  }
+}
+
+export function creemDispute(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'disp_test_1',
+    object: 'dispute',
+    amount: 1210,
+    currency: 'EUR',
+    // A charged-back transaction reports its whole amount as refunded.
+    transaction: creemTransaction({ status: 'chargedBack', refunded_amount: 1210 }),
+    customer: { id: 'cust_test_1', object: 'customer', email: 'buyer@example.com' },
+    created_at: Date.parse('2026-08-05T12:00:00.000Z'),
+    mode: 'prod',
+    ...overrides,
+  }
+}
+
+/** The envelope: `{id, eventType, created_at (epoch ms), object}`. */
+export function creemEvent(
+  eventType: string,
+  object: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'evt_test_1',
+    eventType,
+    created_at: Date.parse('2026-07-31T10:00:05.000Z'),
+    object,
+    ...overrides,
+  }
+}
+
+/**
  * The ECB daily file, in the exact nesting the real document uses.
  *
  * Single-quoted attributes, because that is what the ECB publishes — a fixture

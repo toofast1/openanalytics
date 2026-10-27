@@ -18,6 +18,7 @@ import {
   CredentialKeyringError,
   createCredentialVault,
   createDodoRevenueAdapter,
+  createCreemRevenueAdapter,
   createLemonSqueezyRevenueAdapter,
   createS3ObjectStorage,
   createPolarRevenueAdapter,
@@ -310,6 +311,7 @@ if (env.DATABASE_URL) {
           createPolarRevenueAdapter(),
           createDodoRevenueAdapter(),
           createLemonSqueezyRevenueAdapter(),
+          createCreemRevenueAdapter(),
         ]),
       }
     } catch (error) {

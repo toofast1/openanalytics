@@ -303,14 +303,15 @@ describe('GET /v1/revenue/providers', () => {
       'polar',
       'dodo',
       'lemonsqueezy',
-      'paddle',
       'creem',
+      'paddle',
     ])
     expect(body.items.filter((item) => item.available).map((item) => item.id)).toEqual([
       'stripe',
       'polar',
       'dodo',
       'lemonsqueezy',
+      'creem',
     ])
     expect(body.items[0]).toEqual({ id: 'stripe', display_name: 'Stripe', available: true })
   })

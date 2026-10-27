@@ -74,6 +74,28 @@ export default function RevenueDocsPage() {
         </p>
       </DocSection>
 
+      <DocSection title="Connecting Creem">
+        <p>
+          An API key from Creem&apos;s dashboard (Developers), then a webhook
+          endpoint at the address we show you, whose signing secret you paste
+          back. Subscribe it to <Code>checkout.completed</Code>,{" "}
+          <Code>subscription.paid</Code>, <Code>refund.created</Code> and{" "}
+          <Code>dispute.created</Code>; anything else it receives is
+          acknowledged and ignored.
+        </p>
+        <p>
+          Creem is the merchant of record, so revenue is reported net of the
+          tax it remits, and refunds at the amount the customer got back,
+          tax included. A new subscriber&apos;s first payment is counted once.
+        </p>
+        <p>
+          For attribution, the checkout id (<Code>ch_…</Code>) your success
+          page has is the <Code>order_id</Code> to send with the conversion. To
+          link by person instead, put the id you give <Code>identify()</Code>{" "}
+          in the checkout&apos;s metadata as <Code>oa_external_id</Code>.
+        </p>
+      </DocSection>
+
       <DocSection title="Attribution is opt-in, and it asks something of you">
         <p>
           Revenue totals need nothing from your visitors. Tying a payment back

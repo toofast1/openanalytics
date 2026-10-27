@@ -134,3 +134,13 @@ export function signLemonSqueezyWebhook(input: {
     'x-signature': signature,
   }
 }
+
+/** Builds Creem's `creem-signature` header: the same hex HMAC, another name. */
+export function signCreemWebhook(input: {
+  payload: string
+  secret: string
+}): Record<string, string> {
+  return {
+    'creem-signature': createHmac('sha256', input.secret).update(input.payload).digest('hex'),
+  }
+}
