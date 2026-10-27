@@ -26,7 +26,7 @@
     "@openanalytics/contracts": "workspace:*",
     "@openanalytics/domain": "workspace:*",
     "@openanalytics/observability": "workspace:*",
-    "zod": "4.4.3",
+    "zod": "4.6.7",
     "@openanalytics/auth": "workspace:*",
     "ioredis": "5.11.1"
   }
