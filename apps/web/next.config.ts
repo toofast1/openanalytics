@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, "..", ".."),
   },
+  // Since 16.4, `next dev` writes an AGENTS.md of its own into apps/web and
+  // re-creates it when deleted. The repository's AGENTS.md is the one place
+  // its rules live; a second, generated one beside it is a disagreement
+  // waiting to happen and an untracked file in every contributor's tree.
+  agentRules: false,
   /**
    * Serve AVIF where the browser says it can read it.
    *
