@@ -11,9 +11,11 @@ import { useAnalyticsInterval } from "@/components/dashboard/interval-context";
 import { relativeTime } from "@/components/dashboard/data-state";
 import { ApiErrorPanel } from "@/components/dashboard/api-error";
 import { RecentVisitorModal } from "@/components/dashboard/realtime-board";
+import { JourneyDialog } from "@/components/dashboard/revenue-transactions";
 import {
   SeeAllModal,
   SeeAllSkeleton,
+  useIntervalLabel,
 } from "@/components/dashboard/see-all-modal";
 import { FlagIcon, MarkCircle } from "@/components/dashboard/tech-icons";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +30,12 @@ import {
   LIVE_API,
   resolveSiteSlugCached,
   revenue,
+  type AnalyticsRange,
   type RecentVisitor,
   type RevenueConnectionState,
   type RevenueSummaryResponse,
   type RevenueTotals,
+  type RevenueTransaction,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/currencies";
 import { MOCK_REVENUE_SUMMARY } from "@/lib/mock";
@@ -228,35 +232,59 @@ export function RevenueCard() {
 
     <AnimatePresence>
       {listOpen ? (
-        <PayingVisitorsModal onClose={() => setListOpen(false)} slug={slug} />
+        <PayingVisitorsModal
+          intervalLabel={useIntervalLabel()}
+          onClose={() => setListOpen(false)}
+          range={range}
+          slug={slug}
+        />
       ) : null}
     </AnimatePresence>
     </>
   );
 }
 
+interface PayingRow {
+  id: string;
+  avatarSeed: string;
+  title: string;
+  subtitle: string;
+  amount_minor: number;
+  currency: string;
+  occurred_at: string | null;
+  country: string | null;
+  visitor?: RecentVisitor;
+  transaction?: RevenueTransaction;
+}
+
 /**
- * The card's "See all": the realtime board's visitor list, filtered to the
- * rows that carry a revenue marker — trailing 24 hours, the same window and
- * the same read (`recent-visitors`) the realtime board runs on, so a person
- * seen here is the same row there.
+ * The card's "See all": lists the paying visitors and transactions for the
+ * currently selected dashboard interval (`range`), while matching against
+ * real-time visitors for full hero-identity contexts when available.
  *
- * Clicking a paying visitor opens their hero-identity journey modal (with a
- * back button to return to this list), answering both "who paid recently" and
- * "where did they come from / what pages did they read" without leaving the
- * overview dashboard.
+ * Clicking a row opens either their hero-identity journey modal (`RecentVisitorModal`)
+ * or the transaction purchase journey dialog (`JourneyDialog`), answering both
+ * "who paid" and "where did they come from / what pages did they read" without
+ * leaving the overview dashboard.
  */
 function PayingVisitorsModal({
   slug,
+  range,
+  intervalLabel,
   onClose,
 }: {
   slug: string;
+  range: AnalyticsRange;
+  intervalLabel: string;
   onClose: () => void;
 }) {
-  const [rows, setRows] = React.useState<RecentVisitor[] | null>(null);
+  const [siteId, setSiteId] = React.useState<string | null>(null);
+  const [rows, setRows] = React.useState<PayingRow[] | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [selectedVisitor, setSelectedVisitor] =
     React.useState<RecentVisitor | null>(null);
+  const [selectedTransaction, setSelectedTransaction] =
+    React.useState<RevenueTransaction | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -264,20 +292,118 @@ function PayingVisitorsModal({
     void Promise.resolve().then(async () => {
       if (cancelled) return;
       if (!LIVE_API) {
-        setRows(MOCK_PAYING_VISITORS);
+        setRows(
+          MOCK_PAYING_VISITORS.map((mv) => ({
+            id: mv.visitor,
+            avatarSeed: mv.visitor,
+            title: anonName(mv.visitor),
+            subtitle:
+              mv.pageviews > 0
+                ? `${mv.pageviews} ${mv.pageviews === 1 ? "page" : "pages"}`
+                : "payment only",
+            amount_minor: mv.revenue!.amount_minor,
+            currency: mv.revenue!.currency,
+            occurred_at: mv.last_seen,
+            country: mv.country,
+            visitor: mv,
+          }))
+        );
         return;
       }
       try {
         const { site_id } = await resolveSiteSlugCached(slug);
+        if (cancelled) return;
+        setSiteId(site_id);
         const timezone =
           Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
-        const response = await getRecentVisitors(
-          site_id,
-          { hours: 24, timezone },
-          { signal: controller.signal }
-        );
+
+        // Query both in parallel: transactions for the selected range (e.g. yesterday,
+        // last 7 days, etc.), and recent visitors for the trailing 24h hero identity context.
+        const [txResult, rvResult] = await Promise.allSettled([
+          revenue.transactions(site_id, range, {
+            signal: controller.signal,
+          }),
+          getRecentVisitors(
+            site_id,
+            { hours: 24, timezone },
+            { signal: controller.signal }
+          ),
+        ]);
+
         if (cancelled) return;
-        setRows(response.items.filter((item) => item.revenue !== undefined));
+
+        const transactions =
+          txResult.status === "fulfilled" ? txResult.value.items : [];
+        const recentVisitors =
+          rvResult.status === "fulfilled"
+            ? rvResult.value.items.filter((item) => item.revenue !== undefined)
+            : [];
+
+        const resultRows: PayingRow[] = [];
+        const usedVisitors = new Set<string>();
+
+        if (transactions.length > 0) {
+          for (const tx of transactions) {
+            const matchedRv = recentVisitors.find(
+              (rv) =>
+                !usedVisitors.has(rv.visitor) &&
+                rv.revenue &&
+                rv.revenue.amount_minor === tx.gross.amount_minor
+            );
+            if (matchedRv) {
+              usedVisitors.add(matchedRv.visitor);
+              resultRows.push({
+                id: tx.object_id,
+                avatarSeed: matchedRv.visitor,
+                title: anonName(matchedRv.visitor),
+                subtitle:
+                  matchedRv.pageviews > 0
+                    ? `${matchedRv.pageviews} ${matchedRv.pageviews === 1 ? "page" : "pages"}`
+                    : (tx.product_name ?? "payment only"),
+                amount_minor: tx.gross.amount_minor,
+                currency: tx.gross.currency,
+                occurred_at: tx.occurred_at,
+                country: matchedRv.country,
+                visitor: matchedRv,
+                transaction: tx,
+              });
+            } else {
+              resultRows.push({
+                id: tx.object_id,
+                avatarSeed: tx.object_id,
+                title: tx.product_name ?? anonName(tx.object_id),
+                subtitle:
+                  tx.matched_via !== "none"
+                    ? "attributed visit"
+                    : "payment only",
+                amount_minor: tx.gross.amount_minor,
+                currency: tx.gross.currency,
+                occurred_at: tx.occurred_at,
+                country: null,
+                transaction: tx,
+              });
+            }
+          }
+        } else if (recentVisitors.length > 0) {
+          for (const rv of recentVisitors) {
+            resultRows.push({
+              id: rv.visitor,
+              avatarSeed: rv.visitor,
+              title: anonName(rv.visitor),
+              subtitle:
+                rv.pageviews > 0
+                  ? `${rv.pageviews} ${rv.pageviews === 1 ? "page" : "pages"}`
+                  : "payment only",
+              amount_minor: rv.revenue!.amount_minor,
+              currency: rv.revenue!.currency,
+              occurred_at: rv.last_seen,
+              country: rv.country,
+              visitor: rv,
+            });
+          }
+        }
+
+        setRows(resultRows);
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -286,7 +412,7 @@ function PayingVisitorsModal({
       cancelled = true;
       controller.abort();
     };
-  }, [slug]);
+  }, [slug, range]);
 
   if (selectedVisitor !== null) {
     return (
@@ -300,10 +426,21 @@ function PayingVisitorsModal({
     );
   }
 
+  if (selectedTransaction !== null && siteId !== null) {
+    return (
+      <JourneyDialog
+        onClose={() => setSelectedTransaction(null)}
+        range={range}
+        siteId={siteId}
+        transaction={selectedTransaction}
+      />
+    );
+  }
+
   return (
     <SeeAllModal
       onClose={onClose}
-      subtitle="Visitors whose payments landed in the last 24 hours"
+      subtitle={`Visitors whose payments landed · ${intervalLabel}`}
       title="Paying visitors"
     >
       {failed ? (
@@ -314,46 +451,51 @@ function PayingVisitorsModal({
         <SeeAllSkeleton />
       ) : rows.length === 0 ? (
         <p className="px-3 py-6 text-sm text-muted-foreground">
-          No attributed payments in the last 24 hours. When one lands, the
+          No attributed payments in {intervalLabel.toLowerCase()}. When one lands, the
           visitor who made it shows up here.
         </p>
       ) : (
-        <ul>
-          {rows.map((visitor) => (
-            <li key={visitor.visitor}>
+        <ul className="flex flex-col gap-1">
+          {rows.map((row) => (
+            <li key={row.id}>
               <button
-                className="flex w-full cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setSelectedVisitor(visitor)}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5"
+                onClick={() => {
+                  if (row.visitor) {
+                    setSelectedVisitor(row.visitor);
+                  } else if (row.transaction) {
+                    setSelectedTransaction(row.transaction);
+                  }
+                }}
                 type="button"
               >
-                <UserAvatar seed={visitor.visitor} size={24} />
-                <span className="min-w-0 shrink-0 text-sm font-medium">
-                  {anonName(visitor.visitor)}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                  {visitor.pageviews > 0
-                    ? `${visitor.pageviews} ${visitor.pageviews === 1 ? "page" : "pages"}`
-                    : "payment only"}
-                </span>
-                {visitor.revenue ? (
+                <UserAvatar seed={row.avatarSeed} size={24} />
+                <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2">
+                  <span className="truncate text-sm font-medium">
+                    {row.title}
+                  </span>
+                  <span className="hidden truncate font-mono text-xs text-muted-foreground sm:inline">
+                    {row.subtitle}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                   <Badge
                     className="shrink-0 tabular-nums"
                     icon={<CoinsDollarIcon />}
                     size="sm"
                     variant="success"
                   >
-                    {formatMoney(
-                      visitor.revenue.amount_minor,
-                      visitor.revenue.currency
-                    )}
+                    {formatMoney(row.amount_minor, row.currency)}
                   </Badge>
-                ) : null}
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-                  {relativeTime(visitor.last_seen)}
-                </span>
-                <MarkCircle className="size-6">
-                  <FlagIcon className="size-4" code={visitor.country} />
-                </MarkCircle>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+                    {relativeTime(row.occurred_at)}
+                  </span>
+                  {row.country ? (
+                    <MarkCircle className="size-6 shrink-0">
+                      <FlagIcon className="size-4" code={row.country} />
+                    </MarkCircle>
+                  ) : null}
+                </div>
               </button>
             </li>
           ))}

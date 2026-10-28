@@ -25,3 +25,4 @@ apps/web/
 # Formatting it fails `format:check` on the bot's own commit, and fixing that
 # commit by hand only moves the failure to whoever signs next.
 .github/cla-signatures.json
+.claude/

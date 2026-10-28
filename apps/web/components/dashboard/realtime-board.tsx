@@ -1447,12 +1447,12 @@ function VisitorDetailModal({
                               {session.entries.map((entry) => (
                                 <div
                                   key={entry.id}
-                                  className="flex items-center justify-between px-4 py-1.5 text-sm"
+                                  className="flex items-center justify-between gap-3 px-4 py-1.5 text-sm"
                                 >
-                                  <span className="truncate font-mono text-xs">
+                                  <span className="min-w-0 flex-1 truncate font-mono text-xs">
                                     {entry.path}
                                   </span>
-                                  <span className="text-xs tabular-nums text-muted-foreground">
+                                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                     {timeAgo(entry.secondsAgo)}
                                   </span>
                                 </div>

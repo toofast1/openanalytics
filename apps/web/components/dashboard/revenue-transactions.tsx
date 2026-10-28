@@ -317,7 +317,7 @@ const SCOPE_COPY: Record<string, string> = {
   identified: "From the last id rotation before they identified, onward",
 };
 
-function JourneyDialog({
+export function JourneyDialog({
   transaction,
   siteId,
   range,
