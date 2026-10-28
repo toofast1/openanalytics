@@ -139,6 +139,39 @@ export async function isSiteFullyProjected(db: Executor, siteId: string): Promis
 }
 
 /**
+ * The oldest `updated_at` among a site's heads the projection has not reached,
+ * or null when it has reached them all.
+ *
+ * The attribution watermark's ceiling. Discovery finds a site again only through
+ * a head changed *after* `computed_through`, and marking a head projected moves
+ * `projected_version`, not `updated_at` — so a pass that read its facts before
+ * the projection caught up, and then advanced past those heads, left nothing
+ * that could bring the site back until the staleness clause fired. On a fresh
+ * connection that is the backfill itself: revenue read as zero for up to a whole
+ * refresh interval. Read at the same moment as `isSiteFullyProjected`, before
+ * the facts are.
+ */
+export async function readOldestUnprojectedRevenueObjectUpdate(
+  db: Executor,
+  siteId: string,
+): Promise<Date | null> {
+  const rows = await db
+    .select({ oldest: sql<string | null>`min(${revenueObjects.updatedAt})` })
+    .from(revenueObjects)
+    .where(
+      and(
+        eq(revenueObjects.siteId, siteId),
+        sql`${revenueObjects.projectedVersion} < ${revenueObjects.version}`,
+      ),
+    )
+
+  const oldest = rows[0]?.oldest
+  if (oldest === null || oldest === undefined) return null
+  const parsed = new Date(oldest)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+/**
  * Mark a site for a full-site rollup recompute (migration 0037; ADR-0033
  * D2c/D7). Milestone 12 Checkpoint 5.
  *

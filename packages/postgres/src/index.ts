@@ -298,6 +298,7 @@ export {
   claimRevenueAttributionSite,
   getRevenueAttributionState,
   isSiteFullyProjected,
+  readOldestUnprojectedRevenueObjectUpdate,
   listSitesForRevenueAttribution,
   markRevenueRollupRecompute,
   readOldestChangedRevenueChargeOccurrence,

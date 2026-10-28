@@ -22,6 +22,7 @@ import {
   advanceRevenueRollupRecompute,
   claimRevenueAttributionSite,
   isSiteFullyProjected,
+  readOldestUnprojectedRevenueObjectUpdate,
   listSitesForRevenueAttribution,
   markRevenueRollupRecompute,
   readOldestChangedRevenueChargeOccurrence,
@@ -353,6 +354,23 @@ export async function attributeSite(
     // length.
     const projectedBeforeRead = await isSiteFullyProjected(deps.db, siteId)
 
+    // --- How far the watermark may move ------------------------------------
+    //
+    // The other half of the same race, on the watermark rather than the cursor.
+    // A head the projection had not reached is missing from the facts this pass
+    // reads, so the pass has not computed it — and advancing past its
+    // `updated_at` would leave nothing to rediscover the site, because marking a
+    // head projected does not move `updated_at`. A fresh connection lost its
+    // whole backfill this way until the staleness clause came round. Stopping a
+    // millisecond short keeps the head "changed since the watermark", so the next
+    // tick picks the site up once the projection has caught up. Read with the
+    // check above, before the facts, for the same reason.
+    const unprojectedSince = projectedBeforeRead
+      ? null
+      : await readOldestUnprojectedRevenueObjectUpdate(deps.db, siteId)
+    const watermarkMs =
+      unprojectedSince === null ? nowMs : Math.min(nowMs, unprojectedSince.getTime() - 1)
+
     // --- The rollup range, and the escape hatch the horizon cannot provide --
     //
     // The ATTRIBUTION horizon is charge-only, and rightly so — only a charge
@@ -493,7 +511,7 @@ export async function attributeSite(
       // out of the horizon would be rediscovered by the staleness clause on
       // every single tick forever.
       await runRollup()
-      await advance(deps, siteId, nowMs)
+      await advance(deps, siteId, watermarkMs)
       // Counted as a run, like every other path that reaches a decided state.
       // `revenueAttributionRuns` means "a site was processed and its watermark
       // advanced", so an empty horizon is a run — otherwise the counter would
@@ -542,7 +560,7 @@ export async function attributeSite(
         charges: chargeFacts.length,
       })
       await runRollup()
-      await advance(deps, siteId, nowMs)
+      await advance(deps, siteId, watermarkMs)
       deps.metrics.increment(WORKER_METRICS.revenueAttributionRuns)
       return { status: 'ok', rows: 0, matchedVia: NO_MATCHES }
     }
@@ -723,7 +741,7 @@ export async function attributeSite(
     // recomputes the same horizon and finds nothing left to do.
     await runRollup()
 
-    await advance(deps, siteId, nowMs)
+    await advance(deps, siteId, watermarkMs)
     deps.metrics.increment(WORKER_METRICS.revenueAttributionRuns)
 
     if (plan.changed > 0) {
