@@ -233,7 +233,6 @@ export function RevenueCard() {
     <AnimatePresence>
       {listOpen ? (
         <PayingVisitorsModal
-          intervalLabel={useIntervalLabel()}
           onClose={() => setListOpen(false)}
           range={range}
           slug={slug}
@@ -270,14 +269,13 @@ interface PayingRow {
 function PayingVisitorsModal({
   slug,
   range,
-  intervalLabel,
   onClose,
 }: {
   slug: string;
   range: AnalyticsRange;
-  intervalLabel: string;
   onClose: () => void;
 }) {
+  const intervalLabel = useIntervalLabel();
   const [siteId, setSiteId] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<PayingRow[] | null>(null);
   const [failed, setFailed] = React.useState(false);
