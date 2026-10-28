@@ -63,6 +63,9 @@ describe('the alias table', () => {
     // label onto the host is what puts the 10,362 tagged visits and those 396 in
     // one row instead of two.
     expect(refOf('https://example.com/?ref=producthunt')?.domain).toBe('producthunt.com')
+    expect(refOf('https://example.com/?ref=chatgpt')?.domain).toBe('chatgpt.com')
+    expect(refOf('https://example.com/?ref=claude')?.domain).toBe('claude.ai')
+    expect(refOf('https://example.com/?ref=perplexity')?.domain).toBe('perplexity.ai')
   })
 
   it('does not guess a TLD for a label it has not measured', () => {

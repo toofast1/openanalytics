@@ -2,6 +2,7 @@
 
 import {
   ArrowDown01Icon,
+  ArrowLeft01Icon,
   ArrowRight02Icon,
   Cancel01Icon,
   CoinsDollarIcon,
@@ -132,6 +133,66 @@ type AnonVisitor = {
   secondsAgo: number;
   online: boolean;
 };
+
+export type VisitorModalTarget = {
+  hash: string;
+  name: string;
+  country: string;
+  deviceType: string;
+  browser: string | null;
+  os: string | null;
+  currentPath: string | null;
+  secondsAgo: number;
+  online: boolean;
+};
+
+export type VisitorModalSession = {
+  id: string;
+  startedAtS: number;
+  referrer: string | null;
+  entries: Array<{ id: string; path: string; secondsAgo: number }>;
+};
+
+export function recentVisitorToModalTarget(
+  item: RecentVisitor,
+  nowS: number
+): VisitorModalTarget {
+  const lastSeenS = Math.floor(Date.parse(item.last_seen) / 1000);
+  return {
+    hash: item.visitor,
+    name: anonName(item.visitor),
+    country: item.country === "" ? "unknown" : item.country,
+    deviceType: item.device_type === "" ? "unknown" : item.device_type,
+    browser: item.browser === "" ? null : item.browser,
+    os: item.os === "" ? null : item.os,
+    currentPath: null,
+    secondsAgo: Math.max(0, nowS - lastSeenS),
+    online: false,
+  };
+}
+
+export function visitorTrailToModalSessions(
+  sessions: readonly VisitorSession[],
+  nowS: number
+): VisitorModalSession[] {
+  return sessions.map((session, index) => ({
+    id: session.session_id === "" ? `unattributed-${index}` : session.session_id,
+    startedAtS: Math.floor(Date.parse(session.started_at) / 1000),
+    referrer:
+      session.pages.find((page) => page.referrer_domain !== "")
+        ?.referrer_domain ?? null,
+    // Pages arrive oldest-first; the card reads newest-first, so a
+    // fresh pageview lands on top.
+    entries: [...session.pages].reverse().map((page) => ({
+      id: page.event_id,
+      path: page.page_path,
+      secondsAgo: Math.max(
+        0,
+        nowS - Math.floor(Date.parse(page.occurred_at) / 1000)
+      ),
+    })),
+  }));
+}
 
 /**
  * The wall clock and the age vocabulary both moved to `realtime-clock.ts`
@@ -379,19 +440,6 @@ export function RealtimeBoard() {
   const slug = params.site ? decodeURIComponent(params.site) : "";
   const { status, snapshot } = useRealtime(slug);
 
-  const names = React.useMemo(
-    () => new Intl.DisplayNames(["en"], { type: "region" }),
-    []
-  );
-  const countryName = (code: string): string => {
-    if (code === "unknown" || code === "") return "Unknown";
-    try {
-      return names.of(code.toUpperCase()) ?? code;
-    } catch {
-      return code;
-    }
-  };
-
   const clockBucket = useClockBucket();
 
   /**
@@ -557,44 +605,6 @@ export function RealtimeBoard() {
   // same visitor's new events, and closes it if the hash rotated away.
   const active = visitors.find((visitor) => visitor.hash === activeHash) ?? null;
   const close = React.useCallback(() => setActiveHash(null), []);
-
-  // Scroll hint (same language as the overview mini cards): a chevron chip at
-  // the modal's bottom while there is more below; it fades once you reach it.
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [scrollHint, setScrollHint] = React.useState<"none" | "more" | "end">(
-    "none"
-  );
-  const measureScroll = React.useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollHeight - el.clientHeight <= 4) {
-      setScrollHint("none");
-      return;
-    }
-    const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 4;
-    setScrollHint(atEnd ? "end" : "more");
-  }, []);
-
-  // ResizeObserver fires its initial callback async, so no setState-in-effect
-  React.useEffect(() => {
-    if (!active) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(measureScroll);
-    ro.observe(el);
-    if (el.firstElementChild) ro.observe(el.firstElementChild);
-    return () => ro.disconnect();
-  }, [active, measureScroll]);
-
-  // Escape closes the modal
-  React.useEffect(() => {
-    if (!active) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, close]);
 
   const renderRow = (visitor: AnonVisitor) => {
     const revenue = revenueByHash.get(visitor.hash) ?? null;
@@ -794,33 +804,9 @@ export function RealtimeBoard() {
    */
   const trailLoaded = !LIVE_API || serverSessions !== null;
 
-  let sessionsForModal: Array<{
-    id: string;
-    startedAtS: number;
-    referrer: string | null;
-    entries: Array<{ id: string; path: string; secondsAgo: number }>;
-  }> =
+  let sessionsForModal: VisitorModalSession[] =
     serverSessions !== null && serverSessions.length > 0
-      ? serverSessions.map((session, index) => ({
-          id:
-            session.session_id === ""
-              ? `unattributed-${index}`
-              : session.session_id,
-          startedAtS: Math.floor(Date.parse(session.started_at) / 1000),
-          referrer:
-            session.pages.find((page) => page.referrer_domain !== "")
-              ?.referrer_domain ?? null,
-          // Pages arrive oldest-first; the card reads newest-first, so a
-          // fresh pageview lands on top.
-          entries: [...session.pages].reverse().map((page) => ({
-            id: page.event_id,
-            path: page.page_path,
-            secondsAgo: Math.max(
-              0,
-              nowS - Math.floor(Date.parse(page.occurred_at) / 1000)
-            ),
-          })),
-        }))
+      ? visitorTrailToModalSessions(serverSessions, nowS)
       : active !== null && active.events.length > 0
         ? [
             {
@@ -893,57 +879,6 @@ export function RealtimeBoard() {
     if (candidatesS.length === 0) return active.secondsAgo;
     return Math.max(0, nowS - Math.min(...candidatesS));
   })();
-
-  // The hero says who with marks, not words: flag, browser, OS and device as
-  // icons under the name (each carries its label for hover and screen
-  // readers), with the time facts spelled out below.
-  //
-  // **Where they are is the third fact, and the board already knew it.** The
-  // row renders the presence `path`; the modal had the same visitor object in
-  // scope and printed only the two times. That is how this panel could say it
-  // had no pageviews for somebody standing on a page: the trail is keyed on an
-  // anonymous id, presence is not, and the modal was showing only the half
-  // that can be empty.
-  const details: Array<{
-    label: string;
-    value: React.ReactNode;
-    /** Full width on its own row: a path is longer than half a grid column. */
-    wide?: boolean;
-  }> = active
-    ? [
-        { label: "First seen", value: timeAgo(firstSeenAgoS) },
-        {
-          label: "Last seen",
-          value: active.online ? (
-            <span
-              key="online"
-              className="flex items-center justify-center gap-1.5 text-success-foreground"
-            >
-              <span className="bp-pulse size-1.5 rounded-full bg-success" />
-              Now
-            </span>
-          ) : (
-            timeAgo(active.secondsAgo)
-          ),
-        },
-        // Presence only. Rows built from the recent-visitors read carry
-        // `currentPath: null`, and for those the trail below is the answer
-        // rather than a path they left some time ago.
-        ...(active.currentPath === null
-          ? []
-          : [
-              {
-                label: "Currently on",
-                value: (
-                  <span className="block truncate" title={active.currentPath}>
-                    {active.currentPath}
-                  </span>
-                ),
-                wide: true,
-              },
-            ]),
-      ]
-    : [];
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-2">
@@ -1028,345 +963,539 @@ export function RealtimeBoard() {
       {/* hero-identity modal — plain entrance, X top-right, Escape closes */}
       <AnimatePresence>
         {active && (
-          // z-[60]: above the floating tab bar (z-50)
-          <div className="fixed inset-0 z-[60]">
-            <motion.div
-              key="visitor-scrim"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.15 } }}
-              onClick={close}
-              className="absolute inset-0 bg-black/40"
-            />
-            {/* flex centering wrapper — motion keeps full control of the
-                panel's transform, so no translate classes on the panel */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
-              <motion.div
-                key="visitor-panel"
-                role="dialog"
-                aria-modal="true"
-                aria-label={active.name}
-                // Bouncy pop: the centered card springs in with a slight
-                // bounce. The drop shadow lives here — the squircle clip
-                // inside would slice it off.
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{
-                  opacity: 0,
-                  scale: 0.94,
-                  transition: { duration: 0.12 },
-                }}
-                transition={POP_SPRING}
-                className="pointer-events-auto relative h-[min(85vh,760px)] w-full max-w-lg rounded-[36px] shadow-[0_24px_80px_rgba(0,0,0,0.3)] sm:rounded-[48px]"
+          <VisitorDetailModal
+            firstSeenAgoS={firstSeenAgoS}
+            onClose={close}
+            revenue={activeRevenue}
+            revenueEvents={activeRevenueEvents}
+            sessions={sessionsForModal}
+            trailLoaded={trailLoaded}
+            visitor={active}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Self-contained visitor detail modal for any `RecentVisitor` row outside the
+ * `/realtime` board (e.g. the Revenue card's Paying visitors list). Fetches
+ * `analytics/visitor?hash=` over the trailing 24 hours so the caller gets the
+ * exact same hero-identity card, revenue entries, and session-by-session
+ * referrer + page trail as `/realtime`.
+ */
+export function RecentVisitorModal({
+  slug,
+  visitor,
+  onClose,
+  onBack,
+}: {
+  slug: string;
+  visitor: RecentVisitor;
+  onClose: () => void;
+  onBack?: () => void;
+}) {
+  const clockBucket = useClockBucket();
+  const nowS = clockBucket * 10;
+  const trailRefresh = Math.floor(clockBucket / 3);
+  const [trail, setTrail] = React.useState<{
+    hash: string;
+    sessions: readonly VisitorSession[];
+    revenue: VisitorRevenue | null;
+    revenueEvents: readonly RevenueJourneyEntry[];
+  } | null>(null);
+
+  React.useEffect(() => {
+    void trailRefresh;
+    if (!LIVE_API) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    const fetchTrail = async () => {
+      try {
+        const { site_id } = await resolveSiteSlugCached(slug);
+        const timezone =
+          Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+        const response = await getVisitorTrail(
+          site_id,
+          { hash: visitor.visitor, hours: 24, timezone },
+          { signal: controller.signal }
+        );
+        if (!cancelled) {
+          setTrail({
+            hash: visitor.visitor,
+            sessions: response.sessions,
+            revenue: response.revenue ?? null,
+            revenueEvents: response.revenue_events ?? [],
+          });
+        }
+      } catch {
+        // Keep previous or empty state if the auxiliary read fails.
+      }
+    };
+    void fetchTrail();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [slug, visitor.visitor, trailRefresh]);
+
+  const target = React.useMemo(
+    () => recentVisitorToModalTarget(visitor, nowS),
+    [visitor, nowS]
+  );
+  const currentTrail = trail !== null && trail.hash === visitor.visitor ? trail : null;
+  const trailLoaded = !LIVE_API || currentTrail !== null;
+  const sessions =
+    currentTrail !== null
+      ? visitorTrailToModalSessions(currentTrail.sessions, nowS)
+      : [];
+  const oldestSession = sessions[sessions.length - 1];
+  const firstSeenAgoS = (() => {
+    const candidatesS: number[] = [
+      Math.floor(Date.parse(visitor.first_seen) / 1000),
+    ];
+    if (oldestSession !== undefined) candidatesS.push(oldestSession.startedAtS);
+    return Math.max(0, nowS - Math.min(...candidatesS));
+  })();
+  const revenue =
+    (currentTrail !== null ? currentTrail.revenue : null) ??
+    visitor.revenue ??
+    null;
+  const revenueEvents = currentTrail !== null ? currentTrail.revenueEvents : [];
+
+  return (
+    <VisitorDetailModal
+      firstSeenAgoS={firstSeenAgoS}
+      onBack={onBack}
+      onClose={onClose}
+      revenue={revenue}
+      revenueEvents={revenueEvents}
+      sessions={sessions}
+      trailLoaded={trailLoaded}
+      visitor={target}
+    />
+  );
+}
+
+function VisitorDetailModal({
+  visitor,
+  firstSeenAgoS,
+  revenue,
+  revenueEvents,
+  sessions,
+  trailLoaded,
+  onClose,
+  onBack,
+}: {
+  visitor: VisitorModalTarget;
+  firstSeenAgoS: number;
+  revenue: VisitorRevenue | null;
+  revenueEvents: readonly RevenueJourneyEntry[];
+  sessions: readonly VisitorModalSession[];
+  trailLoaded: boolean;
+  onClose: () => void;
+  onBack?: () => void;
+}) {
+  const names = React.useMemo(
+    () => new Intl.DisplayNames(["en"], { type: "region" }),
+    []
+  );
+  const countryName = (code: string): string => {
+    if (code === "unknown" || code === "") return "Unknown";
+    try {
+      return names.of(code.toUpperCase()) ?? code;
+    } catch {
+      return code;
+    }
+  };
+
+  // Scroll hint (same language as the overview mini cards): a chevron chip at
+  // the modal's bottom while there is more below; it fades once you reach it.
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [scrollHint, setScrollHint] = React.useState<"none" | "more" | "end">(
+    "none"
+  );
+  const measureScroll = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.clientHeight <= 4) {
+      setScrollHint("none");
+      return;
+    }
+    const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 4;
+    setScrollHint(atEnd ? "end" : "more");
+  }, []);
+
+  // ResizeObserver fires its initial callback async, so no setState-in-effect
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(measureScroll);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, [visitor.hash, measureScroll]);
+
+  // Escape steps back when opened from a parent list, or closes the modal.
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") (onBack ?? onClose)();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onBack, onClose]);
+
+  // The hero says who with marks, not words: flag, browser, OS and device as
+  // icons under the name (each carries its label for hover and screen
+  // readers), with the time facts spelled out below.
+  //
+  // **Where they are is the third fact, and the board already knew it.** The
+  // row renders the presence `path`; the modal had the same visitor object in
+  // scope and printed only the two times. That is how this panel could say it
+  // had no pageviews for somebody standing on a page: the trail is keyed on an
+  // anonymous id, presence is not, and the modal was showing only the half
+  // that can be empty.
+  const details: Array<{
+    label: string;
+    value: React.ReactNode;
+    /** Full width on its own row: a path is longer than half a grid column. */
+    wide?: boolean;
+  }> = [
+    { label: "First seen", value: timeAgo(firstSeenAgoS) },
+    {
+      label: "Last seen",
+      value: visitor.online ? (
+        <span
+          key="online"
+          className="flex items-center justify-center gap-1.5 text-success-foreground"
+        >
+          <span className="bp-pulse size-1.5 rounded-full bg-success" />
+          Now
+        </span>
+      ) : (
+        timeAgo(visitor.secondsAgo)
+      ),
+    },
+    // Presence only. Rows built from the recent-visitors read carry
+    // `currentPath: null`, and for those the trail below is the answer
+    // rather than a path they left some time ago.
+    ...(visitor.currentPath === null
+      ? []
+      : [
+          {
+            label: "Currently on",
+            value: (
+              <span className="block truncate" title={visitor.currentPath}>
+                {visitor.currentPath}
+              </span>
+            ),
+            wide: true,
+          },
+        ]),
+  ];
+
+  // z-[60]: above the floating tab bar (z-50)
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <motion.div
+        key="visitor-scrim"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0, transition: { duration: 0.15 } }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40"
+      />
+      {/* flex centering wrapper — motion keeps full control of the
+          panel's transform, so no translate classes on the panel */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+        <motion.div
+          key="visitor-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-label={visitor.name}
+          // Bouncy pop: the centered card springs in with a slight
+          // bounce. The drop shadow lives here — the squircle clip
+          // inside would slice it off.
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{
+            opacity: 0,
+            scale: 0.94,
+            transition: { duration: 0.12 },
+          }}
+          transition={POP_SPRING}
+          className="pointer-events-auto relative h-[min(85vh,760px)] w-full max-w-lg rounded-[36px] shadow-[0_24px_80px_rgba(0,0,0,0.3)] sm:rounded-[48px]"
+        >
+          {/* the card itself, in the squircle language — no gray frame */}
+          <SquircleSurface className="relative h-full w-full overflow-hidden rounded-[36px] border border-border bg-card [--card-clip-radius:20px] sm:rounded-[58px] sm:[--card-clip-handle:3px] sm:[--card-clip-radius:26px]">
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label="Back"
+                className="absolute left-4 top-4 z-20 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/4 text-muted-foreground outline-none transition-colors hover:bg-black/8 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {/* the card itself, in the squircle language — no gray frame */}
-                <SquircleSurface className="relative h-full w-full overflow-hidden rounded-[36px] border border-border bg-card [--card-clip-radius:20px] sm:rounded-[58px] sm:[--card-clip-handle:3px] sm:[--card-clip-radius:26px]">
-                  <button
-                    type="button"
-                    onClick={close}
-                    aria-label="Close"
-                    className="absolute right-4 top-4 z-20 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/4 text-muted-foreground outline-none transition-colors hover:bg-black/8 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <Cancel01Icon className="size-4" />
-                  </button>
+                <ArrowLeft01Icon className="size-4" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="absolute right-4 top-4 z-20 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/4 text-muted-foreground outline-none transition-colors hover:bg-black/8 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Cancel01Icon className="size-4" />
+            </button>
 
-                  {/* min-h-full column so the gray journey band always
-                      stretches to the bottom; no visible scrollbar, and
-                      overscroll-none kills the rubber-band that flashes a
-                      different background */}
-                  <motion.div
-                    ref={scrollRef}
-                    onScroll={measureScroll}
-                    variants={MODAL_CONTAINER}
-                    initial="hidden"
-                    animate="show"
-                    className="h-full overflow-y-auto overscroll-none bg-[#f6f6f6] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  >
-                    <div className="flex min-h-full flex-col">
-                      {/* hero identity — flips up into place with the
-                          choreography */}
-                      <motion.div
-                        variants={MODAL_ITEM}
-                        className="flex flex-col items-center gap-5 bg-card px-6 pb-8 pt-14 text-center"
-                      >
-                        <UserAvatar seed={active.hash} size={64} />
-                        <p className="text-xl font-medium tracking-tight">
-                          {active.name}
-                        </p>
+            {/* min-h-full column so the gray journey band always
+                stretches to the bottom; no visible scrollbar, and
+                overscroll-none kills the rubber-band that flashes a
+                different background */}
+            <motion.div
+              ref={scrollRef}
+              onScroll={measureScroll}
+              variants={MODAL_CONTAINER}
+              initial="hidden"
+              animate="show"
+              className="h-full overflow-y-auto overscroll-none bg-[#f6f6f6] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              <div className="flex min-h-full flex-col">
+                {/* hero identity — flips up into place with the
+                    choreography */}
+                <motion.div
+                  variants={MODAL_ITEM}
+                  className="flex flex-col items-center gap-5 bg-card px-6 pb-8 pt-14 text-center"
+                >
+                  <UserAvatar seed={visitor.hash} size={64} />
+                  <p className="text-xl font-medium tracking-tight">
+                    {visitor.name}
+                  </p>
 
-                        {/* tech marks — icon-only, the tab bar's gliding
-                            tooltip carries the labels */}
-                        <TechMarks
-                          items={[
+                  {/* tech marks — icon-only, the tab bar's gliding
+                      tooltip carries the labels */}
+                  <TechMarks
+                    items={[
+                      {
+                        key: "country",
+                        label: countryName(visitor.country),
+                        icon: (
+                          <FlagIcon
+                            code={visitor.country}
+                            className="size-4.5"
+                          />
+                        ),
+                      },
+                      ...(visitor.browser !== null
+                        ? [
                             {
-                              key: "country",
-                              label: countryName(active.country),
+                              key: "browser",
+                              label: familyLabel(visitor.browser),
                               icon: (
-                                <FlagIcon
-                                  code={active.country}
-                                  className="size-4.5"
-                                />
-                              ),
-                            },
-                            ...(active.browser !== null
-                              ? [
-                                  {
-                                    key: "browser",
-                                    label: familyLabel(active.browser),
-                                    icon: (
-                                      <BrowserIcon
-                                        family={active.browser}
-                                        className="size-5"
-                                      />
-                                    ),
-                                  },
-                                ]
-                              : []),
-                            ...(active.os !== null
-                              ? [
-                                  {
-                                    key: "os",
-                                    label: familyLabel(active.os),
-                                    icon: (
-                                      <OSIcon
-                                        family={active.os}
-                                        className="size-5"
-                                      />
-                                    ),
-                                  },
-                                ]
-                              : []),
-                            {
-                              key: "device",
-                              label:
-                                DEVICE_LABEL[active.deviceType] ??
-                                active.deviceType,
-                              icon: (
-                                <DeviceGlyph
-                                  deviceType={active.deviceType}
+                                <BrowserIcon
+                                  family={visitor.browser}
                                   className="size-5"
                                 />
                               ),
                             },
-                          ]}
-                        />
+                          ]
+                        : []),
+                      ...(visitor.os !== null
+                        ? [
+                            {
+                              key: "os",
+                              label: familyLabel(visitor.os),
+                              icon: (
+                                <OSIcon
+                                  family={visitor.os}
+                                  className="size-5"
+                                />
+                              ),
+                            },
+                          ]
+                        : []),
+                      {
+                        key: "device",
+                        label:
+                          DEVICE_LABEL[visitor.deviceType] ??
+                          visitor.deviceType,
+                        icon: (
+                          <DeviceGlyph
+                            deviceType={visitor.deviceType}
+                            className="size-5"
+                          />
+                        ),
+                      },
+                    ]}
+                  />
 
-                        {/* the window's money, said in one pill (CP7). It
-                            appears only when the wire sent it — owner with
-                            attributed revenue — so nobody else's modal ever
-                            grows a money-shaped hole. */}
-                        {activeRevenue !== null ? (
-                          <p className="flex items-center gap-1 rounded-full bg-success/15 px-3 py-1 text-sm font-medium tabular-nums text-success-foreground">
-                            {formatMoney(
-                              activeRevenue.amount_minor,
-                              activeRevenue.currency
-                            )}
-                            <span className="font-normal opacity-80">
-                              ·{" "}
-                              {activeRevenue.transaction_count === 1
-                                ? "1 charge"
-                                : `${activeRevenue.transaction_count} charges`}
-                            </span>
-                          </p>
-                        ) : null}
+                  {/* the window's money, said in one pill (CP7). It
+                      appears only when the wire sent it — owner with
+                      attributed revenue — so nobody else's modal ever
+                      grows a money-shaped hole. */}
+                  {revenue !== null ? (
+                    <p className="flex items-center gap-1 rounded-full bg-success/15 px-3 py-1 text-sm font-medium tabular-nums text-success-foreground">
+                      {formatMoney(revenue.amount_minor, revenue.currency)}
+                      <span className="font-normal opacity-80">
+                        ·{" "}
+                        {revenue.transaction_count === 1
+                          ? "1 charge"
+                          : `${revenue.transaction_count} charges`}
+                      </span>
+                    </p>
+                  ) : null}
 
-                        <div className="grid grid-cols-2 gap-x-10 gap-y-5">
-                          {details.map((detail) => (
-                            <div
-                              className={
-                                detail.wide ? "col-span-2 min-w-0" : undefined
-                              }
-                              key={detail.label}
-                            >
-                              <p className="text-xs text-muted-foreground">
-                                {detail.label}
-                              </p>
-                              <div className="mt-1 text-sm font-medium">
-                                {detail.value}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-
-                      {/* the trail below, on gray — flex-1 keeps the band
-                          solid to the panel's bottom even when short; z-10 so
-                          it rides over the receding hero */}
-                      <div className="relative z-10 flex-1 border-t border-border bg-[#f6f6f6]">
-                        <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-6 py-8">
-                          {/* The money entries, as their own card — never
-                              interleaved into a session: which session a
-                              payment happened *inside* is not measured
-                              anywhere (last-touch is an approximation), so
-                              placing a charge between two pageviews would be
-                              rendering a claim the data does not make. Each
-                              line is the journey view's own renderer, wire
-                              sentence and all. */}
-                          {activeRevenueEvents.length > 0 ? (
-                            <motion.div variants={MODAL_ITEM}>
-                              <SquircleSurface className="flex flex-col rounded-[24px] border border-border bg-card p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:13px] sm:rounded-[36px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:17px]">
-                                <p className="flex items-center justify-between gap-2 pb-1.5 pl-3.5 pr-3 pt-1 text-sm text-muted-foreground">
-                                  <span>Revenue · last 24 hours</span>
-                                </p>
-                                <SquircleSurface className="flex-1 overflow-hidden rounded-[20px] border border-border bg-[#f6f6f6] shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:11px] sm:rounded-[30px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:14px]">
-                                  <ol className="flex flex-col gap-2 px-4 py-3">
-                                    {activeRevenueEvents.map((entry) => (
-                                      <JourneyEntryRow
-                                        entry={entry}
-                                        key={`${entry.event_id}-${entry.occurred_at}`}
-                                      />
-                                    ))}
-                                  </ol>
-                                </SquircleSurface>
-                              </SquircleSurface>
-                            </motion.div>
-                          ) : null}
-                          {sessionsForModal.length === 0 ? (
-                            trailLoaded ? (
-                              // Answered and empty — a real fact, stated: the
-                              // server has no pageviews for this hash in the
-                              // window. The copy used to blame ingest lag
-                              // ("can take a minute"), which is the rarest
-                              // cause and the one a reader can do nothing
-                              // with. The ordinary causes are structural:
-                              // presence is refreshed by *any* accepted batch
-                              // (ADR-0035 D6) and by a heartbeat that writes
-                              // no history at all, and the anonymous id is
-                              // keyed on the visitor's address — so a changed
-                              // address mints a new hash whose pageviews all
-                              // sit under the previous one. Both read as
-                              // "here now, nothing behind them", and neither
-                              // resolves by waiting.
-                              //
-                              // Where they are leads, where presence knows it.
-                              // The reader opened this row to find out what
-                              // somebody is doing, and the one fact that
-                              // answers that should not sit behind the reason
-                              // the rest of the panel is empty.
-                              <motion.p
-                                variants={MODAL_ITEM}
-                                className="px-2 py-4 text-center text-sm leading-6 text-muted-foreground"
-                              >
-                                {active !== null &&
-                                active.currentPath !== null ? (
-                                  <>
-                                    On{" "}
-                                    <span className="font-medium text-foreground">
-                                      {active.currentPath}
-                                    </span>{" "}
-                                    right now.{" "}
-                                  </>
-                                ) : null}
-                                No pageviews recorded for this visitor in the
-                                last 24 hours. Presence is refreshed by any
-                                activity, so somebody can be here without one.
-                              </motion.p>
-                            ) : // Not answered yet: nothing at all, on
-                            // purpose. A placeholder card used to stand here
-                            // so an empty band could not be read as "no
-                            // history" — but the sentence above is what makes
-                            // that claim, and it is already gated on the
-                            // answer, so silence cannot be mistaken for it.
-                            // What the placeholder did instead was blink: it
-                            // animated in, and 150-300 ms later the real
-                            // cards animated in over it, on every first open
-                            // of a visitor. Saying nothing for one beat is
-                            // quieter than saying something false-looking
-                            // twice.
-                            null
-                          ) : null}
-                          {sessionsForModal.map((session, index) => (
-                            // The newest card is keyed by its *slot*, not by
-                            // its session id, and that is what stops an
-                            // online visitor's modal from blinking. Before
-                            // the trail answers, this slot holds the live
-                            // feed's own pages under the id `current`; when
-                            // the answer lands it becomes a real session id.
-                            // Keyed by id, that swap unmounted the card and
-                            // mounted another, replaying the enter animation
-                            // a beat after the modal opened. Keyed by slot,
-                            // the same card takes on the fuller history in
-                            // place. The rest keep their real ids, so a
-                            // session that arrives later still animates in
-                            // as the new thing it is.
-                            <motion.div
-                              key={index === 0 ? "current-session" : session.id}
-                              variants={MODAL_ITEM}
-                            >
-                              {/* overview-card anatomy: squircle frame, meta
-                                  in the top strip, pageviews on the inset
-                                  panel; newest page sits on top */}
-                              <SquircleSurface className="flex flex-col rounded-[24px] border border-border bg-card p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:13px] sm:rounded-[36px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:17px]">
-                                <p className="flex items-center justify-between gap-2 pb-1.5 pl-3.5 pr-3 pt-1 text-sm text-muted-foreground">
-                                  <span>
-                                    {index === 0 && active.online
-                                      ? "This session"
-                                      : "Earlier"}{" "}
-                                    · {clockLabel(session.startedAtS)}
-                                  </span>
-                                  {/* null referrer IS Direct — the server
-                                      already drops self-referrals (ADR-0028),
-                                      so no external source means exactly what
-                                      the reports' Direct bucket means */}
-                                  <ReferrerInline entry={session.referrer} />
-                                </p>
-                                <SquircleSurface className="flex-1 overflow-hidden rounded-[20px] border border-border bg-[#f6f6f6] shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:11px] sm:rounded-[30px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:14px]">
-                                  <div className="py-1.5">
-                                    {session.entries.map((entry) => (
-                                      <div
-                                        key={entry.id}
-                                        className="flex items-center justify-between px-4 py-1.5 text-sm"
-                                      >
-                                        <span className="truncate font-mono text-xs">
-                                          {entry.path}
-                                        </span>
-                                        <span className="text-xs tabular-nums text-muted-foreground">
-                                          {timeAgo(entry.secondsAgo)}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </SquircleSurface>
-                              </SquircleSurface>
-                            </motion.div>
-                          ))}
+                  <div className="grid grid-cols-2 gap-x-10 gap-y-5">
+                    {details.map((detail) => (
+                      <div
+                        className={
+                          detail.wide ? "col-span-2 min-w-0" : undefined
+                        }
+                        key={detail.label}
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          {detail.label}
+                        </p>
+                        <div className="mt-1 text-sm font-medium">
+                          {detail.value}
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
 
-                  {/* scroll hint — same chip as the overview mini cards: bobs
-                      while there is more below, fades away at the end */}
-                  <AnimatePresence>
-                    {scrollHint === "more" && (
-                      <motion.span
-                        aria-hidden="true"
-                        initial={{ opacity: 0, scale: 0.7 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.7 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
-                        className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex size-6 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-white/90 shadow-sm"
-                      >
-                        <motion.span
-                          animate={{ y: [0, 2.5, 0] }}
-                          transition={{
-                            duration: 1.4,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                          }}
-                          className="flex"
+                {/* the trail below, on gray — flex-1 keeps the band
+                    solid to the panel's bottom even when short; z-10 so
+                    it rides over the receding hero */}
+                <div className="relative z-10 flex-1 border-t border-border bg-[#f6f6f6]">
+                  <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-6 py-8">
+                    {/* The money entries, as their own card — never
+                        interleaved into a session: which session a
+                        payment happened *inside* is not measured
+                        anywhere (last-touch is an approximation), so
+                        placing a charge between two pageviews would be
+                        rendering a claim the data does not make. Each
+                        line is the journey view's own renderer, wire
+                        sentence and all. */}
+                    {revenueEvents.length > 0 ? (
+                      <motion.div variants={MODAL_ITEM}>
+                        <SquircleSurface className="flex flex-col rounded-[24px] border border-border bg-card p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:13px] sm:rounded-[36px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:17px]">
+                          <p className="flex items-center justify-between gap-2 pb-1.5 pl-3.5 pr-3 pt-1 text-sm text-muted-foreground">
+                            <span>Revenue · last 24 hours</span>
+                          </p>
+                          <SquircleSurface className="flex-1 overflow-hidden rounded-[20px] border border-border bg-[#f6f6f6] shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:11px] sm:rounded-[30px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:14px]">
+                            <ol className="flex flex-col gap-2 px-4 py-3">
+                              {revenueEvents.map((entry) => (
+                                <JourneyEntryRow
+                                  entry={entry}
+                                  key={`${entry.event_id}-${entry.occurred_at}`}
+                                />
+                              ))}
+                            </ol>
+                          </SquircleSurface>
+                        </SquircleSurface>
+                      </motion.div>
+                    ) : null}
+                    {sessions.length === 0 ? (
+                      trailLoaded ? (
+                        // Answered and empty — a real fact, stated: the
+                        // server has no pageviews for this hash in the
+                        // window.
+                        <motion.p
+                          variants={MODAL_ITEM}
+                          className="px-2 py-4 text-center text-sm leading-6 text-muted-foreground"
                         >
-                          <ArrowDown01Icon className="size-3.5 text-muted-foreground" />
-                        </motion.span>
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </SquircleSurface>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
+                          {visitor.currentPath !== null ? (
+                            <>
+                              On{" "}
+                              <span className="font-medium text-foreground">
+                                {visitor.currentPath}
+                              </span>{" "}
+                              right now.{" "}
+                            </>
+                          ) : null}
+                          No pageviews recorded for this visitor in the last 24
+                          hours. Presence is refreshed by any activity, so
+                          somebody can be here without one.
+                        </motion.p>
+                      ) : null
+                    ) : null}
+                    {sessions.map((session, index) => (
+                      <motion.div
+                        key={index === 0 ? "current-session" : session.id}
+                        variants={MODAL_ITEM}
+                      >
+                        {/* overview-card anatomy: squircle frame, meta
+                            in the top strip, pageviews on the inset
+                            panel; newest page sits on top */}
+                        <SquircleSurface className="flex flex-col rounded-[24px] border border-border bg-card p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:13px] sm:rounded-[36px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:17px]">
+                          <p className="flex items-center justify-between gap-2 pb-1.5 pl-3.5 pr-3 pt-1 text-sm text-muted-foreground">
+                            <span>
+                              {index === 0 && visitor.online
+                                ? "This session"
+                                : "Earlier"}{" "}
+                              · {clockLabel(session.startedAtS)}
+                            </span>
+                            {/* null referrer IS Direct — the server
+                                already drops self-referrals (ADR-0028),
+                                so no external source means exactly what
+                                the reports' Direct bucket means */}
+                            <ReferrerInline entry={session.referrer} />
+                          </p>
+                          <SquircleSurface className="flex-1 overflow-hidden rounded-[20px] border border-border bg-[#f6f6f6] shadow-[0_1px_2px_rgba(0,0,0,0.06)] [--card-clip-radius:11px] sm:rounded-[30px] sm:[--card-clip-handle:2.5px] sm:[--card-clip-radius:14px]">
+                            <div className="py-1.5">
+                              {session.entries.map((entry) => (
+                                <div
+                                  key={entry.id}
+                                  className="flex items-center justify-between px-4 py-1.5 text-sm"
+                                >
+                                  <span className="truncate font-mono text-xs">
+                                    {entry.path}
+                                  </span>
+                                  <span className="text-xs tabular-nums text-muted-foreground">
+                                    {timeAgo(entry.secondsAgo)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </SquircleSurface>
+                        </SquircleSurface>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* scroll hint — same chip as the overview mini cards: bobs
+                while there is more below, fades away at the end */}
+            <AnimatePresence>
+              {scrollHint === "more" && (
+                <motion.span
+                  aria-hidden="true"
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.7 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex size-6 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-white/90 shadow-sm"
+                >
+                  <motion.span
+                    animate={{ y: [0, 2.5, 0] }}
+                    transition={{
+                      duration: 1.4,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                    className="flex"
+                  >
+                    <ArrowDown01Icon className="size-3.5 text-muted-foreground" />
+                  </motion.span>
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </SquircleSurface>
+        </motion.div>
+      </div>
     </div>
   );
 }

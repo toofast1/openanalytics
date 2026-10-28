@@ -32,7 +32,7 @@ import {
   SquircleCardScroll,
 } from "@/components/ui/squircle-card";
 import type { AnalyticsMeta, SourceRow } from "@/lib/api";
-import { resolveReferrer } from "@/lib/referrers";
+import { resolveAiUtm, resolveReferrer } from "@/lib/referrers";
 
 /**
  * Acquisition, from `GET /v1/sites/{site_id}/analytics/sources`. The contract
@@ -99,13 +99,15 @@ export type FoldedRow = {
   raw: string[];
 };
 
-/** The referrer dimension: every row's domain, "" folding into Direct. */
+/** The referrer dimension: every row's domain, "" folding into Direct unless
+ *  an assistant's UTM tag names the AI source (matching AI referrals). */
 export function foldReferrers(items: SourceRow[]): FoldedRow[] {
   const byLabel = new Map<string, FoldedRow>();
   for (const row of items) {
-    const source = row.referrer_domain
+    const referrer = row.referrer_domain
       ? resolveReferrer(row.referrer_domain)
       : null;
+    const source = referrer ?? resolveAiUtm(row.utm_source, row.utm_medium);
     const label = source?.name ?? "Direct / none";
     const bucket = byLabel.get(label) ?? {
       label,
@@ -117,7 +119,10 @@ export function foldReferrers(items: SourceRow[]): FoldedRow[] {
     };
     bucket.views += row.views;
     bucket.visitors += row.visitors;
-    if (!bucket.raw.includes(row.referrer_domain)) {
+    if (
+      (referrer !== null || source === null) &&
+      !bucket.raw.includes(row.referrer_domain)
+    ) {
       bucket.raw.push(row.referrer_domain);
     }
     byLabel.set(label, bucket);

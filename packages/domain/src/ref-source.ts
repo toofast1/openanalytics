@@ -104,7 +104,82 @@ export const REF_SOURCE_ALIASES: Readonly<Record<string, string>> = Object.freez
   bsky: 'bsky.app',
   indiehackers: 'indiehackers.com',
   google: 'google.com',
+  chatgpt: 'chatgpt.com',
+  openai: 'chatgpt.com',
+  claude: 'claude.ai',
+  perplexity: 'perplexity.ai',
+  gemini: 'gemini.google.com',
 })
+
+/**
+ * Canonical domains of AI assistants whose outbound links carry `utm_source` or
+ * `utm_medium` tags (e.g. `utm_source=chatgpt.com`, `utm_source=Claude AI` with
+ * `utm_medium=claude.ai`), keyed by both bare normalized names and hostnames.
+ */
+const AI_UTM_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  chatgpt: 'chatgpt.com',
+  openai: 'chatgpt.com',
+  'chatgpt.com': 'chatgpt.com',
+  'chat.openai.com': 'chatgpt.com',
+  'openai.com': 'chatgpt.com',
+  claude: 'claude.ai',
+  claudeai: 'claude.ai',
+  anthropic: 'claude.ai',
+  'claude.ai': 'claude.ai',
+  'anthropic.com': 'claude.ai',
+  perplexity: 'perplexity.ai',
+  perplexityai: 'perplexity.ai',
+  'perplexity.ai': 'perplexity.ai',
+  gemini: 'gemini.google.com',
+  googlegemini: 'gemini.google.com',
+  'gemini.google.com': 'gemini.google.com',
+  copilot: 'copilot.microsoft.com',
+  microsoftcopilot: 'copilot.microsoft.com',
+  'copilot.microsoft.com': 'copilot.microsoft.com',
+  grok: 'grok.com',
+  'grok.com': 'grok.com',
+  'x.ai': 'grok.com',
+  'grok.x.ai': 'grok.com',
+  deepseek: 'deepseek.com',
+  'deepseek.com': 'deepseek.com',
+  'chat.deepseek.com': 'deepseek.com',
+  mistral: 'mistral.ai',
+  lechat: 'mistral.ai',
+  'mistral.ai': 'mistral.ai',
+  'chat.mistral.ai': 'mistral.ai',
+  qwen: 'qwen.ai',
+  'qwen.ai': 'qwen.ai',
+  'chat.qwen.ai': 'qwen.ai',
+  metaai: 'meta.ai',
+  'meta.ai': 'meta.ai',
+})
+
+function resolveAiUtmField(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null
+  const raw = value.trim().toLowerCase()
+  if (raw === '' || raw === PII_REDACTED.toLowerCase()) return null
+  const host = canonicalReferrerHost(raw)
+  if (host !== '' && Object.hasOwn(AI_UTM_ALIASES, host)) {
+    return AI_UTM_ALIASES[host] ?? null
+  }
+  const key = raw.replace(/[^a-z0-9]/g, '')
+  if (key !== '' && Object.hasOwn(AI_UTM_ALIASES, key)) {
+    return AI_UTM_ALIASES[key] ?? null
+  }
+  return null
+}
+
+/**
+ * The canonical assistant domain named by `utm_source` / `utm_medium` when a
+ * link from an AI assistant app arrives with no HTTP `Referer`. Returns `null`
+ * for ordinary campaign tags (`utm_source=newsletter`, etc.).
+ */
+export function aiUtmSourceOf(attribution: {
+  readonly utm_source?: string | null | undefined
+  readonly utm_medium?: string | null | undefined
+}): string | null {
+  return resolveAiUtmField(attribution.utm_source) ?? resolveAiUtmField(attribution.utm_medium)
+}
 
 /**
  * The longest `ref` value considered at all, before normalization.

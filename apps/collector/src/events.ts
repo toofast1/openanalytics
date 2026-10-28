@@ -8,6 +8,7 @@ import {
   type PersistedEvent,
 } from '@openanalytics/contracts'
 import {
+  aiUtmSourceOf,
   attributionFrom,
   billableCount,
   classifyEvents,
@@ -485,8 +486,10 @@ function buildPersistedEvent(input: BuildPersistedInput): PersistedEvent {
   const derivable = referrer.domain === null && !referrer.isSelf
   const ref = derivable ? refSourceOf(page) : null
   const clickId = derivable && ref === null ? clickIdSourceOf(page) : null
+  const aiUtmDomain =
+    derivable && ref === null && clickId === null ? aiUtmSourceOf(attribution) : null
   const source = {
-    referrer_domain: ref?.domain ?? clickId?.domain ?? referrer.domain,
+    referrer_domain: ref?.domain ?? clickId?.domain ?? aiUtmDomain ?? referrer.domain,
     referrer_path: referrer.path,
     click_id_source: clickId?.key ?? null,
     ref_source: ref?.value ?? null,

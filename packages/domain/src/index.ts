@@ -377,7 +377,7 @@ export {
 
 export { CLICK_ID_SOURCES, clickIdSourceOf, type ClickIdSource } from './click-id.ts'
 
-export { REF_SOURCE_ALIASES, refSourceOf, type RefSource } from './ref-source.ts'
+export { REF_SOURCE_ALIASES, aiUtmSourceOf, refSourceOf, type RefSource } from './ref-source.ts'
 
 export {
   FILTER_DIMENSIONS,

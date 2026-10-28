@@ -10,6 +10,7 @@ import { anonName } from "@/components/dashboard/anon-identity";
 import { useAnalyticsInterval } from "@/components/dashboard/interval-context";
 import { relativeTime } from "@/components/dashboard/data-state";
 import { ApiErrorPanel } from "@/components/dashboard/api-error";
+import { RecentVisitorModal } from "@/components/dashboard/realtime-board";
 import {
   SeeAllModal,
   SeeAllSkeleton,
@@ -240,10 +241,10 @@ export function RevenueCard() {
  * the same read (`recent-visitors`) the realtime board runs on, so a person
  * seen here is the same row there.
  *
- * A list and nothing else, on purpose: rows do not open the journey modal
- * or anywhere else. The one modal answers "who paid recently"; the click
- * would start a second navigation inside a dialog, which is the pattern the
- * house keeps refusing.
+ * Clicking a paying visitor opens their hero-identity journey modal (with a
+ * back button to return to this list), answering both "who paid recently" and
+ * "where did they come from / what pages did they read" without leaving the
+ * overview dashboard.
  */
 function PayingVisitorsModal({
   slug,
@@ -254,6 +255,8 @@ function PayingVisitorsModal({
 }) {
   const [rows, setRows] = React.useState<RecentVisitor[] | null>(null);
   const [failed, setFailed] = React.useState(false);
+  const [selectedVisitor, setSelectedVisitor] =
+    React.useState<RecentVisitor | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -285,6 +288,18 @@ function PayingVisitorsModal({
     };
   }, [slug]);
 
+  if (selectedVisitor !== null) {
+    return (
+      <RecentVisitorModal
+        key={selectedVisitor.visitor}
+        onBack={() => setSelectedVisitor(null)}
+        onClose={onClose}
+        slug={slug}
+        visitor={selectedVisitor}
+      />
+    );
+  }
+
   return (
     <SeeAllModal
       onClose={onClose}
@@ -305,38 +320,41 @@ function PayingVisitorsModal({
       ) : (
         <ul>
           {rows.map((visitor) => (
-            <li
-              className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-2"
-              key={visitor.visitor}
-            >
-              <UserAvatar seed={visitor.visitor} size={24} />
-              <span className="min-w-0 shrink-0 text-sm font-medium">
-                {anonName(visitor.visitor)}
-              </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                {visitor.pageviews > 0
-                  ? `${visitor.pageviews} ${visitor.pageviews === 1 ? "page" : "pages"}`
-                  : "payment only"}
-              </span>
-              {visitor.revenue ? (
-                <Badge
-                  className="shrink-0 tabular-nums"
-                  icon={<CoinsDollarIcon />}
-                  size="sm"
-                  variant="success"
-                >
-                  {formatMoney(
-                    visitor.revenue.amount_minor,
-                    visitor.revenue.currency
-                  )}
-                </Badge>
-              ) : null}
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-                {relativeTime(visitor.last_seen)}
-              </span>
-              <MarkCircle className="size-6">
-                <FlagIcon className="size-4" code={visitor.country} />
-              </MarkCircle>
+            <li key={visitor.visitor}>
+              <button
+                className="flex w-full cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setSelectedVisitor(visitor)}
+                type="button"
+              >
+                <UserAvatar seed={visitor.visitor} size={24} />
+                <span className="min-w-0 shrink-0 text-sm font-medium">
+                  {anonName(visitor.visitor)}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+                  {visitor.pageviews > 0
+                    ? `${visitor.pageviews} ${visitor.pageviews === 1 ? "page" : "pages"}`
+                    : "payment only"}
+                </span>
+                {visitor.revenue ? (
+                  <Badge
+                    className="shrink-0 tabular-nums"
+                    icon={<CoinsDollarIcon />}
+                    size="sm"
+                    variant="success"
+                  >
+                    {formatMoney(
+                      visitor.revenue.amount_minor,
+                      visitor.revenue.currency
+                    )}
+                  </Badge>
+                ) : null}
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+                  {relativeTime(visitor.last_seen)}
+                </span>
+                <MarkCircle className="size-6">
+                  <FlagIcon className="size-4" code={visitor.country} />
+                </MarkCircle>
+              </button>
             </li>
           ))}
         </ul>

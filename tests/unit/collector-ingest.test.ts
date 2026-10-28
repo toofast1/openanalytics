@@ -1093,6 +1093,37 @@ describe('POST /v1/events', () => {
       await h.post('/v1/events', batchOf([pageView()]))
       expect(envelopeOf().source.ref_source).toBeNull()
     })
+
+    it('derives the assistant referrer domain when an AI app link arrives with only its utm tag', async () => {
+      const chatgpt = harness()
+      await chatgpt.post(
+        '/v1/events',
+        batchOf([pageView({ page: { url: 'https://shop.example.com/?utm_source=chatgpt.com' } })]),
+      )
+      expect(envelopeOf(chatgpt).source.referrer_domain).toBe('chatgpt.com')
+      expect(envelopeOf(chatgpt).source.utm_source).toBe('chatgpt.com')
+
+      const claude = harness()
+      await claude.post(
+        '/v1/events',
+        batchOf([
+          pageView({
+            page: {
+              url: 'https://shop.example.com/?utm_source=Claude%20AI&utm_medium=claude.ai',
+            },
+          }),
+        ]),
+      )
+      expect(envelopeOf(claude).source.referrer_domain).toBe('claude.ai')
+
+      // Ordinary campaign utm_source values never invent a referrer_domain.
+      const campaign = harness()
+      await campaign.post(
+        '/v1/events',
+        batchOf([pageView({ page: { url: 'https://shop.example.com/?utm_source=newsletter' } })]),
+      )
+      expect(envelopeOf(campaign).source.referrer_domain).toBeNull()
+    })
   })
 
   describe('the realtime touch it makes (ADR-0024)', () => {

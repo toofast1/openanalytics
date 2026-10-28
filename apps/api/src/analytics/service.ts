@@ -1,6 +1,7 @@
 import { ApiError, buildCursorPage } from '@openanalytics/contracts'
 import type { components } from '@openanalytics/contracts'
 import {
+  aiUtmSourceOf,
   classifyImportedRange,
   coarsenPublicGeography,
   derivePreviousPeriod,
@@ -1703,7 +1704,13 @@ export class AnalyticsService {
             occurred_at: bucketToIso(row['occurred_at']),
             page_path: str(row['page_path']),
             page_title: str(row['page_title']),
-            referrer_domain: str(row['referrer_domain']),
+            referrer_domain:
+              str(row['referrer_domain']) !== ''
+                ? str(row['referrer_domain'])
+                : (aiUtmSourceOf({
+                    utm_source: str(row['utm_source']),
+                    utm_medium: str(row['utm_medium']),
+                  }) ?? ''),
           },
         })),
       ),
