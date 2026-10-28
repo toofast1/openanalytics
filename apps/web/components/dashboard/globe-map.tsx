@@ -1,6 +1,6 @@
 "use client";
 
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as React from "react";
 import { createPortal } from "react-dom";
@@ -46,7 +46,7 @@ import { countryCentroid } from "@/lib/country-centroids";
 export function applyGlobeStyle(map: maplibregl.Map) {
   // The stock style renders "Latin name \n native name" — rewrite every
   // label to English only (falling back to latin/local where missing).
-  const englishOnly = [
+  const englishOnly: maplibregl.ExpressionSpecification = [
     "coalesce",
     ["get", "name:en"],
     ["get", "name:latin"],
@@ -68,7 +68,9 @@ export function applyGlobeStyle(map: maplibregl.Map) {
   // Palette sampled from the reference shot: the land base itself is the
   // light green (#d8efc9) — not white — and the ocean is a cyan-leaning
   // sky blue (#81c9f9); vegetation is only a slightly deeper green.
-  const recolor: Array<[string, string, string]> = [
+  const recolor: Array<
+    [string, "background-color" | "fill-color" | "line-color", string]
+  > = [
     ["background", "background-color", "#d8efc9"],
     ["water", "fill-color", "#81c9f9"],
     ["waterway_river", "line-color", "#81c9f9"],
@@ -161,21 +163,14 @@ export function startGlobeSpin(
     if (!dragged) spinEnabled = !spinEnabled;
   });
   const spin = () => {
-    if (spinEnabled && !pointerDown && !dragging) {
-      if (map.isMoving()) {
-        // A zoom animation is running — jumpTo would cancel it (that read
-        // as a hiccup), so rotate by writing straight to the transform,
-        // which composes with the easing instead of killing it.
-        const center = map.transform.center;
-        map.transform.setCenter(
-          new maplibregl.LngLat(center.lng + speed, center.lat),
-        );
-        map.triggerRepaint();
-      } else {
-        const center = map.getCenter();
-        center.lng += speed;
-        map.jumpTo({ center });
-      }
+    // A zoom animation in flight would be cancelled by jumpTo (that reads as
+    // a hiccup), so the spin yields to it as it does to a drag. It used to
+    // keep turning by writing to `map.transform`, which MapLibre 6 no longer
+    // exposes.
+    if (spinEnabled && !pointerDown && !dragging && !map.isMoving()) {
+      const center = map.getCenter();
+      center.lng += speed;
+      map.jumpTo({ center });
     }
     frame = requestAnimationFrame(spin);
   };
@@ -195,6 +190,14 @@ export function GlobeMap({ slug }: { slug: string }) {
     const container = containerRef.current;
     if (!container) return;
 
+    // MapLibre 6 derives its worker's URL from its own `import.meta.url` at
+    // runtime, which no bundler can follow — under Turbopack the worker 404s
+    // and the globe draws no tiles. Spelling the path as a static
+    // `new URL(…, import.meta.url)` makes the bundler emit the file and hand
+    // back where it put it.
+    maplibregl.setWorkerUrl(
+      new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).href,
+    );
     const map = new maplibregl.Map({
       container,
       style: "https://tiles.openfreemap.org/styles/liberty",

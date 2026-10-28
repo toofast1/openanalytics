@@ -20,7 +20,7 @@
     "clean": "tsc --build tsconfig.json --clean"
   },
   "dependencies": {
-    "better-auth": "1.6.23",
+    "better-auth": "1.6.33",
     "@openanalytics/domain": "workspace:*",
     "@openanalytics/postgres": "workspace:*"
   }

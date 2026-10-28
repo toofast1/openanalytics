@@ -22,11 +22,11 @@
   },
   "dependencies": {
     "@hono/node-server": "2.0.10",
-    "hono": "4.12.31",
+    "hono": "4.13.14",
     "@openanalytics/contracts": "workspace:*",
     "@openanalytics/domain": "workspace:*",
     "@openanalytics/observability": "workspace:*",
-    "zod": "4.4.3",
+    "zod": "4.6.7",
     "@openanalytics/auth": "workspace:*",
     "ioredis": "5.11.1"
   }

@@ -25,6 +25,6 @@
   },
   "dependencies": {
     "@openanalytics/contracts": "workspace:*",
-    "hono": "4.12.31"
+    "hono": "4.13.14"
   }
 }

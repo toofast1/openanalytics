@@ -150,6 +150,28 @@ describe('buildAuthOptions', () => {
     expect(MAGIC_LINK_EXPIRES_IN_SECONDS).toBe(60 * 15)
   })
 
+  it('keeps a magic-link token from ever matching an OAuth state (GHSA-965c-763c-88jm)', () => {
+    // Below better-auth 1.7.7, an OAuth `state` is accepted as a magic-link
+    // token when both resolve to the same verification identifier: anyone who
+    // knows an address starts a social sign-in for it and finishes a magic-link
+    // sign-in with the state they were handed — a session for that account, or
+    // a falsely verified new one, without the mailbox. The two lines that keep
+    // the identifiers apart here are a hashed magic-link token and *no* global
+    // `verification.storeIdentifier` (a hashed one re-collides them). Pinned in
+    // the shape the advisory needs — social sign-in on beside the magic link —
+    // because nothing else would notice either line being "tidied" away.
+    const options = buildAuthOptions(
+      makeDeps({
+        sendMagicLinkEmail: async () => {},
+        social: { google: { clientId: 'id', clientSecret: 'secret' } },
+      }),
+    )
+    const magicLink = (options.plugins ?? []).find((p) => p.id === 'magic-link') as
+      { options?: { storeToken?: unknown } } | undefined
+    expect(magicLink?.options?.storeToken).toBe('hashed')
+    expect([undefined, 'plain']).toContain(options.verification?.storeIdentifier)
+  })
+
   it('routes verification email through the injected callback only', async () => {
     const sent: { to: string; url: string; token: string }[] = []
     const options = buildAuthOptions(
