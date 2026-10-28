@@ -20,6 +20,7 @@ import {
   markRevenueRollupRecompute,
   readOldestChangedRevenueChargeOccurrence,
   readOldestChangedRevenueObjectOccurrence,
+  readOldestUnprojectedRevenueObjectUpdate,
   newId,
   resetRevenueProjection,
   startSiteDeletion,
@@ -701,6 +702,40 @@ describeIfPostgres('reporting currency and the rollup re-roll marker', () => {
       const due = await listSitesForRevenueAttribution(db, { staleBefore, limit: 50 })
       expect(due).toContain(changed)
       expect(due).not.toContain(quiet)
+    })
+  })
+
+  describe('the watermark ceiling: the oldest head the projection has not reached', () => {
+    /**
+     * The fresh-connection defect. A pass that read its facts before the
+     * projection copied the backfill's heads, and advanced past their
+     * `updated_at`, left nothing to rediscover the site: marking a head projected
+     * moves `projected_version`, never `updated_at`.
+     */
+    it('answers the oldest unprojected update, then null once projected', async () => {
+      const siteId = await makeSite()
+      await apply(siteId, 'ch_w1', '2026-07-31T10:00:00.000Z')
+      await apply(siteId, 'ch_w2', '2026-07-31T11:00:00.000Z')
+      await pool.query(
+        `UPDATE revenue_objects SET updated_at = CASE object_id
+           WHEN 'ch_w1' THEN '2026-07-31T12:00:00Z'::timestamptz
+           ELSE '2026-07-31T12:05:00Z'::timestamptz END
+         WHERE site_id = $1`,
+        [siteId],
+      )
+
+      expect((await readOldestUnprojectedRevenueObjectUpdate(db, siteId))?.toISOString()).toBe(
+        '2026-07-31T12:00:00.000Z',
+      )
+
+      await markRevenueObjectsProjected(db, {
+        marks: (await listUnprojectedRevenueObjects(db, { siteId, limit: 10 })).map((row) => ({
+          id: row.id,
+          version: row.version,
+          epoch: row.projectionEpoch,
+        })),
+      })
+      expect(await readOldestUnprojectedRevenueObjectUpdate(db, siteId)).toBeNull()
     })
   })
 

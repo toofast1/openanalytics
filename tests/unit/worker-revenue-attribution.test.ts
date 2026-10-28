@@ -41,6 +41,8 @@ const hintsMock = vi.fn()
 const advanceRecomputeMock = vi.fn()
 const markRecomputeMock = vi.fn()
 const projectedMock = vi.fn()
+/** The oldest head the projection had not reached when the pass read its facts. */
+const unprojectedSinceMock = vi.fn()
 const oldestChangedObjectMock = vi.fn()
 /** The site's own `attributed_revenue` switch (ADR-0064 D4a). */
 const ingestSettingsMock = vi.fn()
@@ -59,6 +61,7 @@ vi.mock('@openanalytics/postgres', async (importOriginal) => {
     advanceRevenueRollupRecompute: (...args: unknown[]) => advanceRecomputeMock(...args),
     markRevenueRollupRecompute: (...args: unknown[]) => markRecomputeMock(...args),
     isSiteFullyProjected: (...args: unknown[]) => projectedMock(...args),
+    readOldestUnprojectedRevenueObjectUpdate: (...args: unknown[]) => unprojectedSinceMock(...args),
     readSiteIngestSettings: (...args: unknown[]) => ingestSettingsMock(...args),
     readOldestChangedRevenueObjectOccurrence: (...args: unknown[]) =>
       oldestChangedObjectMock(...args),
@@ -295,6 +298,7 @@ function resetDefaultMocks(): void {
   markRecomputeMock.mockResolvedValue(undefined)
   // The ordinary path: the projection is quiet and nothing old changed.
   projectedMock.mockResolvedValue(true)
+  unprojectedSinceMock.mockResolvedValue(null)
   oldestChangedObjectMock.mockResolvedValue(null)
   releaseMock.mockResolvedValue(undefined)
   listSitesMock.mockResolvedValue([SITE_A])
@@ -388,6 +392,42 @@ describe('the watermark', () => {
     expect(advance.computedThrough.getTime()).toBe(NOW)
     // Only the lease holder may advance.
     expect(advance.claimedBy).toBe('worker-1')
+  })
+
+  it('stops short of a head the projection had not reached when the facts were read', async () => {
+    // The race a fresh connection hits: the backfill writes its heads, this pass
+    // claims the site before the projection has copied them to ClickHouse, reads
+    // no facts, and advances to the run instant. The heads' `updated_at` is then
+    // behind the watermark and nothing rediscovers the site until the staleness
+    // clause fires — a quarter of an hour of revenue reading as zero. Stopping
+    // one millisecond short keeps the head "changed since the watermark", so the
+    // next tick computes it once the projection has caught up.
+    projectedMock.mockResolvedValue(false)
+    unprojectedSinceMock.mockResolvedValue(new Date(NOW - 30_000))
+    const built = fakes({ charges: { [SITE_A]: [] } })
+    const context = deps({ _fakes: built })
+
+    await attributeRevenueOnce(
+      context.deps as unknown as Parameters<typeof attributeRevenueOnce>[0],
+    )
+
+    const advance = advanceMock.mock.calls[0]?.[1] as { computedThrough: Date }
+    expect(advance.computedThrough.getTime()).toBe(NOW - 30_001)
+  })
+
+  it('caps the watermark on the attributed path too', async () => {
+    // Not only the empty one: a pass that attributed what it could read must not
+    // claim the heads it could not.
+    projectedMock.mockResolvedValue(false)
+    unprojectedSinceMock.mockResolvedValue(new Date(NOW - 5_000))
+    const context = deps()
+
+    await attributeRevenueOnce(
+      context.deps as unknown as Parameters<typeof attributeRevenueOnce>[0],
+    )
+
+    const advance = advanceMock.mock.calls[0]?.[1] as { computedThrough: Date }
+    expect(advance.computedThrough.getTime()).toBe(NOW - 5_001)
   })
 
   it('still advances for a site whose charges have all aged out of the horizon', async () => {
