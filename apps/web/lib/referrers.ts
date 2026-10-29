@@ -38,6 +38,10 @@ const EXACT: Record<string, ReferrerInfo> = {
   "hn.algolia.com": { name: "Hacker News", domain: "news.ycombinator.com" },
   "mail.google.com": { name: "Gmail", domain: "mail.google.com" },
   "news.google.com": { name: "Google News", domain: "news.google.com" },
+  "accounts.google.com": {
+    name: "Google Accounts",
+    domain: "google.com",
+  },
   "gemini.google.com": { name: "Gemini", domain: "gemini.google.com", kind: AI },
   "notebooklm.google.com": {
     name: "NotebookLM",

@@ -43,6 +43,21 @@ describe("resolveReferrer and resolveAiUtm", () => {
     })
   })
 
+  it("distinguishes Google Accounts authentication from organic Google Search", () => {
+    expect(resolveReferrer("accounts.google.com")).toEqual({
+      name: "Google Accounts",
+      domain: "google.com",
+    })
+    expect(resolveReferrer("google.com")).toEqual({
+      name: "Google",
+      domain: "google.com",
+    })
+    expect(resolveReferrer("www.google.ro")).toEqual({
+      name: "Google",
+      domain: "google.com",
+    })
+  })
+
   it("resolves dotted and bare AI utm_source tags alike", () => {
     expect(resolveAiUtm("chatgpt.com", "")?.name).toBe("ChatGPT")
     expect(resolveAiUtm("Claude AI", "claude.ai")?.name).toBe("Claude")
