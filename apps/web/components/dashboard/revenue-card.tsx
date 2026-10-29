@@ -412,94 +412,109 @@ function PayingVisitorsModal({
     };
   }, [slug, range]);
 
-  if (selectedVisitor !== null) {
-    return (
-      <RecentVisitorModal
-        key={selectedVisitor.visitor}
-        onBack={() => setSelectedVisitor(null)}
-        onClose={onClose}
-        slug={slug}
-        visitor={selectedVisitor}
-      />
-    );
-  }
-
-  if (selectedTransaction !== null && siteId !== null) {
-    return (
-      <JourneyDialog
-        onClose={() => setSelectedTransaction(null)}
-        range={range}
-        siteId={siteId}
-        transaction={selectedTransaction}
-      />
-    );
-  }
-
   return (
-    <SeeAllModal
-      onClose={onClose}
-      subtitle={`Visitors whose payments landed · ${intervalLabel}`}
-      title="Paying visitors"
-    >
-      {failed ? (
-        <p className="px-3 py-6 text-sm text-muted-foreground">
-          The list could not be loaded. Close this and try again.
-        </p>
-      ) : rows === null ? (
-        <SeeAllSkeleton />
-      ) : rows.length === 0 ? (
-        <p className="px-3 py-6 text-sm text-muted-foreground">
-          No attributed payments in {intervalLabel.toLowerCase()}. When one lands, the
-          visitor who made it shows up here.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {rows.map((row) => (
-            <li key={row.id}>
-              <button
-                className="flex w-full cursor-pointer items-center gap-2 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5"
-                onClick={() => {
-                  if (row.visitor) {
-                    setSelectedVisitor(row.visitor);
-                  } else if (row.transaction) {
-                    setSelectedTransaction(row.transaction);
-                  }
-                }}
-                type="button"
-              >
-                <UserAvatar seed={row.avatarSeed} size={24} />
-                <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {row.title}
-                  </span>
-                  <span className="hidden truncate font-mono text-xs text-muted-foreground sm:inline">
-                    {row.subtitle}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                  <Badge
-                    className="shrink-0 tabular-nums"
-                    icon={<CoinsDollarIcon />}
-                    size="sm"
-                    variant="success"
-                  >
-                    {formatMoney(row.amount_minor, row.currency)}
-                  </Badge>
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-                    {relativeTime(row.occurred_at)}
-                  </span>
-                  {row.country ? (
-                    <MarkCircle className="size-6 shrink-0">
-                      <FlagIcon className="size-4" code={row.country} />
-                    </MarkCircle>
-                  ) : null}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </SeeAllModal>
+    <>
+      <SeeAllModal
+        onClose={
+          selectedVisitor !== null || selectedTransaction !== null
+            ? () => {
+                setSelectedVisitor(null);
+                setSelectedTransaction(null);
+              }
+            : onClose
+        }
+        subtitle={`Visitors whose payments landed · ${intervalLabel}`}
+        title="Paying visitors"
+      >
+        {failed ? (
+          <p className="px-3 py-6 text-sm text-muted-foreground">
+            The list could not be loaded. Close this and try again.
+          </p>
+        ) : rows === null ? (
+          <SeeAllSkeleton />
+        ) : rows.length === 0 ? (
+          <p className="px-3 py-6 text-sm text-muted-foreground">
+            No attributed payments in {intervalLabel.toLowerCase()}. When one lands, the
+            visitor who made it shows up here.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {rows.map((row) => (
+              <li key={row.id}>
+                <button
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5"
+                  onClick={() => {
+                    if (row.visitor) {
+                      setSelectedTransaction(null);
+                      setSelectedVisitor(row.visitor);
+                    } else if (row.transaction) {
+                      setSelectedVisitor(null);
+                      setSelectedTransaction(row.transaction);
+                    }
+                  }}
+                  type="button"
+                >
+                  <UserAvatar seed={row.avatarSeed} size={24} />
+                  <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {row.title}
+                    </span>
+                    <span className="hidden truncate font-mono text-xs text-muted-foreground sm:inline">
+                      {row.subtitle}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                    <Badge
+                      className="shrink-0 tabular-nums"
+                      icon={<CoinsDollarIcon />}
+                      size="sm"
+                      variant="success"
+                    >
+                      {formatMoney(row.amount_minor, row.currency)}
+                    </Badge>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+                      {relativeTime(row.occurred_at)}
+                    </span>
+                    {row.country ? (
+                      <MarkCircle className="size-6 shrink-0">
+                        <FlagIcon className="size-4" code={row.country} />
+                      </MarkCircle>
+                    ) : null}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SeeAllModal>
+
+      <AnimatePresence>
+        {selectedVisitor !== null ? (
+          <div className="relative z-[70]">
+            <RecentVisitorModal
+              key={selectedVisitor.visitor}
+              onBack={() => setSelectedVisitor(null)}
+              onClose={onClose}
+              slug={slug}
+              visitor={selectedVisitor}
+            />
+          </div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedTransaction !== null && siteId !== null ? (
+          <div className="relative z-[70]">
+            <JourneyDialog
+              onClose={() => setSelectedTransaction(null)}
+              range={range}
+              siteId={siteId}
+              transaction={selectedTransaction}
+            />
+          </div>
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }
 
